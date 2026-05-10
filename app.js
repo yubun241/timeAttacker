@@ -592,7 +592,7 @@
         <span class="name">${escapeHtml(s.name || `S${idx + 1}`)}</span>
         <input class="target" type="text" inputmode="numeric"
                placeholder="MMSS.CC" value="${displayVal}" />
-        <button class="del">🗑 削除</button>
+        <button class="del">削除</button>
       `;
 
       const inp = row.querySelector('input.target');
@@ -641,7 +641,6 @@
         redrawEditLines();       // update map
         toast(`「${name}」を削除`);
       });
-
       list.appendChild(row);
     });
   }
@@ -659,9 +658,14 @@
     resetDriveMetrics();
     renderSplitsGrid();
 
-    // Init canvas widgets
-    state.gball = new GBall(document.getElementById('gball-canvas'));
-    state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
+    // Init canvas widgets — deferred to next frame so CSS layout finishes first
+    // (getBoundingClientRect returns 0 if called synchronously after display:flex)
+    state.gball = null;
+    state.speedGraph = null;
+    requestAnimationFrame(() => {
+      state.gball      = new GBall(document.getElementById('gball-canvas'));
+      state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
+    });
 
     // CSV buffer
     state.csvRows = [];
@@ -1110,19 +1114,22 @@
         }
       }
 
-      // G-ball update from latest motion sample
-      if (state.gball) {
-        const lat = state.g_raw.x - state.g_calib.x;
-        const lon = state.g_raw.z - state.g_calib.z;
-        state.g_lat = lat;
-        state.g_lon = lon;
-        state.gball.draw(lat, lon);
-        const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
-        document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
+      // G-ball + speed graph — guard against canvas not ready or draw errors
+      try {
+        if (state.gball) {
+          const lat = state.g_raw.x - state.g_calib.x;
+          const lon = state.g_raw.z - state.g_calib.z;
+          state.g_lat = lat;
+          state.g_lon = lon;
+          state.gball.draw(lat, lon);
+          const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
+          document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
+        }
+        if (state.speedGraph) state.speedGraph.draw();
+      } catch (e) {
+        // Silently skip bad frame — do NOT let this stop the RAF loop
+        console.warn('Widget draw error (skipped):', e.message);
       }
-
-      // Speed graph render
-      if (state.speedGraph) state.speedGraph.draw();
 
       state.rafId = requestAnimationFrame(tick);
     }
@@ -1137,51 +1144,58 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
+      this.w = 0; this.h = 0;
       this.resize();
       window.addEventListener('resize', () => this.resize());
     }
     resize() {
       const dpr = window.devicePixelRatio || 1;
       const r = this.canvas.getBoundingClientRect();
-      this.canvas.width = r.width * dpr;
-      this.canvas.height = r.height * dpr;
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      this.w = r.width; this.h = r.height;
+      if (r.width > 0 && r.height > 0) {
+        this.canvas.width  = Math.round(r.width  * dpr);
+        this.canvas.height = Math.round(r.height * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.w = r.width;
+        this.h = r.height;
+      }
     }
     draw(lat_g, lon_g) {
+      // Attempt resize if dimensions not yet known
+      if (this.w < 1 || this.h < 1) {
+        this.resize();
+        if (this.w < 1 || this.h < 1) return; // still not ready, skip frame
+      }
       const ctx = this.ctx;
       const w = this.w, h = this.h;
       const cx = w / 2, cy = h / 2;
       const r = Math.min(w, h) / 2 - 12;
-      const dot = 10;
+      if (r <= 0) return; // canvas too small, skip
+      const dot = Math.max(6, r * 0.12);
 
       ctx.clearRect(0, 0, w, h);
-      // Outer dim ring
       ctx.fillStyle = '#0a0a0a';
       ctx.beginPath(); ctx.arc(cx, cy, r + 4, 0, Math.PI * 2); ctx.fill();
-      // Outer ring
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-      // 1G ring
-      ctx.strokeStyle = '#2a2a2a';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(cx, cy, r / G_RANGE, 0, Math.PI * 2); ctx.stroke();
-      // Cross hairs
+      const r1g = r / G_RANGE;
+      if (r1g > 0) {
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, r1g, 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.beginPath();
       ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
       ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
       ctx.stroke();
-      // Labels
       ctx.fillStyle = '#555';
-      ctx.font = '9px "IBM Plex Mono", monospace';
+      ctx.font = `${Math.max(8, Math.round(r * 0.15))}px "IBM Plex Mono", monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('F', cx, cy - r - 6);
       ctx.fillText('B', cx, cy + r + 6);
       ctx.fillText('L', cx - r - 8, cy);
       ctx.fillText('R', cx + r + 8, cy);
 
-      // Dot position
       let bx = cx + (lat_g / G_RANGE) * r;
       let by = cy - (lon_g / G_RANGE) * r;
       const dx = bx - cx, dy = by - cy;
@@ -1192,7 +1206,7 @@
       }
       const tg = Math.min(Math.sqrt(lat_g * lat_g + lon_g * lon_g), G_RANGE);
       const iv = tg / G_RANGE;
-      ctx.fillStyle = `rgb(${Math.round(255 * iv)}, ${Math.round(255 * Math.max(0, 1 - iv * 1.2))}, 0)`;
+      ctx.fillStyle = `rgb(${Math.round(255*iv)},${Math.round(255*Math.max(0,1-iv*1.2))},0)`;
       ctx.beginPath(); ctx.arc(bx, by, dot, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1204,18 +1218,22 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.data = [];          // [[ts_sec, kmh], ...]
+      this.data = [];
       this.cur = 0;
+      this.w = 0; this.h = 0;
       this.resize();
       window.addEventListener('resize', () => this.resize());
     }
     resize() {
       const dpr = window.devicePixelRatio || 1;
       const r = this.canvas.getBoundingClientRect();
-      this.canvas.width = r.width * dpr;
-      this.canvas.height = r.height * dpr;
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      this.w = r.width; this.h = r.height;
+      if (r.width > 0 && r.height > 0) {
+        this.canvas.width  = Math.round(r.width  * dpr);
+        this.canvas.height = Math.round(r.height * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.w = r.width;
+        this.h = r.height;
+      }
     }
     addPoint(ts, kmh) {
       this.cur = kmh;
@@ -1228,6 +1246,10 @@
       this.cur = 0;
     }
     draw() {
+      if (this.w < 1 || this.h < 1) {
+        this.resize();
+        if (this.w < 1 || this.h < 1) return;
+      }
       const ctx = this.ctx;
       const w = this.w, h = this.h;
       const PL = 32, PR = 6, PT = 6, PB = 18;
