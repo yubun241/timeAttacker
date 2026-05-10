@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0c10" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>MIRAGE / Time Attack</title>
+
+  <link rel="manifest" href="manifest.json" />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ====== HOME SCREEN ====== -->
+  <section id="screen-home" class="screen active">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">◢</span>
+        <span class="brand-name">MIRAGE</span>
+        <span class="brand-sub">/ TIME ATTACK</span>
+      </div>
+    </header>
+
+    <main class="home-main">
+      <div class="section-title">
+        <span class="dot"></span>
+        <span>COURSES</span>
+      </div>
+
+      <div id="course-list" class="course-list"></div>
+
+      <button id="btn-new-course" class="btn-primary big">
+        <span class="plus">+</span>
+        <span>新規コースを作成</span>
+      </button>
+
+      <div class="hint">
+        マップ上で線を引き、スタート / ゴール / セクションを定義します。
+      </div>
+    </main>
+  </section>
+
+  <!-- ====== EDIT SCREEN ====== -->
+  <section id="screen-edit" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-action="back-home">‹</button>
+      <input id="course-name" class="course-name-input" type="text" placeholder="コース名" />
+      <button class="icon-btn" data-action="edit-settings" title="詳細">⚙</button>
+      <button class="icon-btn" data-action="delete-course" title="削除">✕</button>
+    </header>
+
+    <div class="edit-mode-bar">
+      <button class="mode-btn" data-mode="start">スタート線</button>
+      <button class="mode-btn" data-mode="finish">フィニッシュ線</button>
+      <button class="mode-btn" data-mode="section">セクション線</button>
+      <button class="icon-btn locate-btn" data-action="locate-me" title="現在地へ">⌖</button>
+      <div class="course-type">
+        <label>
+          <input type="checkbox" id="circuit-toggle" />
+          <span>周回</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="edit-status" class="status-strip">マップ上で線を引いてください</div>
+
+    <div id="map-edit" class="map"></div>
+
+    <div class="bottom-bar">
+      <button id="btn-clear-section" class="btn-ghost">セクション全消去</button>
+      <button id="btn-start-drive" class="btn-primary">計測 ▶</button>
+    </div>
+  </section>
+
+  <!-- ====== DETAIL MODAL ====== -->
+  <div id="modal-detail" class="modal">
+    <div class="modal-sheet">
+      <header class="modal-header">
+        <h3>コース詳細</h3>
+        <button class="icon-btn" data-action="close-detail">✕</button>
+      </header>
+      <div class="modal-body">
+
+        <div class="form-row">
+          <label>走行時間（分）</label>
+          <input id="cfg-duration" type="number" inputmode="numeric" min="0" step="1" placeholder="0 = 無制限" />
+        </div>
+
+        <div class="form-row">
+          <label>クールダウン（秒）</label>
+          <input id="cfg-cooldown" type="number" inputmode="decimal" min="0" step="0.1" />
+        </div>
+
+        <div class="form-row">
+          <label>GPS精度フィルタ（m）</label>
+          <input id="cfg-acc" type="number" inputmode="numeric" min="0" step="1" />
+        </div>
+
+        <div class="form-row">
+          <label>進行方向フィルタ</label>
+          <label class="switch">
+            <input id="cfg-dirfilter" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="hint-block">
+          ・精度フィルタ 0 = フィルタ無効<br>
+          ・進行方向フィルタ ON: 初回通過方向と逆向きの通過は無視
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="section-title small"><span class="dot"></span><span>セクション目標タイム</span></div>
+        <div id="sections-edit-list" class="sections-edit-list">
+          <div class="splits-empty">セクション線を描くと表示されます</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== DRIVE SCREEN ====== -->
+  <section id="screen-drive" class="screen">
+    <header class="topbar drive-topbar">
+      <button class="icon-btn" data-action="exit-drive">‹</button>
+      <div class="drive-title">
+        <span id="drive-course-name">--</span>
+        <span class="drive-state" id="drive-state">準備中</span>
+      </div>
+      <div class="gps-indicator" id="gps-indicator">
+        <span class="gps-dot"></span>
+        <span id="gps-acc">--</span>
+      </div>
+    </header>
+
+    <main class="drive-main">
+
+      <button id="btn-start-stop" class="big-action start">START</button>
+
+      <div class="status-grid">
+        <div class="status-cell">
+          <div class="status-label">LAP</div>
+          <div id="lap-count" class="status-value">0</div>
+        </div>
+        <div class="status-cell">
+          <div class="status-label">FINISH</div>
+          <div id="finish-countdown" class="status-value mono">--:--.--</div>
+        </div>
+        <div class="status-cell">
+          <div class="status-label">RECORD</div>
+          <div id="best-lap-time" class="status-value mono accent">--:--.---</div>
+        </div>
+        <div class="status-cell">
+          <div class="status-label">LAST</div>
+          <div id="last-lap-time" class="status-value mono">--:--.---</div>
+        </div>
+      </div>
+
+      <div id="next-sector-display" class="next-sector">
+        <div class="ns-label">to NEXT SECTOR</div>
+        <div id="next-sector-value" class="ns-value">--:--.--</div>
+      </div>
+
+      <div id="best-delta-display" class="best-delta hidden">
+        <span class="bd-label">BEST Δ</span>
+        <span id="best-delta-value" class="bd-value">--</span>
+      </div>
+
+      <div class="now-sector-row">
+        <span class="ns-bar-label">NowSector</span>
+        <span id="now-sector-num" class="ns-bar-num">1</span>
+      </div>
+      <div class="big-timer">
+        <div id="current-lap-time" class="time-display">00:00.000</div>
+      </div>
+
+      <div class="sensors-row">
+        <div class="sensor-cell gball-cell">
+          <canvas id="gball-canvas" width="320" height="320"></canvas>
+          <div class="g-text" id="g-text">0.00 G</div>
+        </div>
+        <div class="sensor-cell speed-cell">
+          <canvas id="speed-canvas" width="600" height="320"></canvas>
+        </div>
+      </div>
+
+      <div id="splits-grid" class="splits-grid"></div>
+
+      <div class="drive-footer">
+        <button id="btn-export-csv" class="btn-ghost">CSV 出力</button>
+        <button id="btn-motion-perm" class="btn-ghost" style="display:none">センサー許可</button>
+      </div>
+
+    </main>
+  </section>
+
+  <div id="toast" class="toast"></div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script src="app.js"></script>
+</body>
+</html>
