@@ -1,5 +1,5 @@
 /* ============================================================
-   TIMEATTACKER  v2
+   MIRAGE / TIME ATTACK  v2
    ============================================================ */
 
 :root {
@@ -426,95 +426,7 @@ body::before {
   margin: 16px 0 8px;
 }
 
-/* Modal footer (save / cancel) */
-.modal-footer {
-  display: flex;
-  gap: 8px;
-  padding: 12px 16px calc(12px + var(--safe-bot));
-  border-top: 1px solid var(--border);
-  background: var(--bg-elev);
-  border-radius: 0 0 12px 12px;
-  flex-shrink: 0;
-}
-.modal-footer .btn-primary { flex: 1; }
-.icon-btn.wide {
-  width: auto;
-  padding: 0 14px;
-  font-size: 13px;
-  letter-spacing: 0.05em;
-  gap: 4px;
-}
-
-/* Target time input hint */
-.target-hint {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--fg-dim);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  line-height: 1.7;
-}
-.target-hint code {
-  background: var(--bg-elev-2);
-  padding: 1px 5px;
-  border-radius: 3px;
-  color: var(--accent);
-  font-family: var(--font-mono);
-}
-.target-hint strong {
-  color: var(--fg);
-}
-
-/* Section edit row: wider target input */
-.section-edit-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-.section-edit-row .name {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--blue);
-  font-weight: 500;
-}
-.section-edit-row input.target {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  padding: 7px 10px;
-  border-radius: 3px;
-  outline: none;
-  width: 110px;
-  text-align: center;
-  letter-spacing: 0.05em;
-}
-.section-edit-row input.target:focus { border-color: var(--accent); }
-.section-edit-row input.target.valid { border-color: var(--green); color: var(--green); }
-.section-edit-row input.target.invalid { border-color: var(--red); }
-.section-edit-row .del {
-  background: transparent;
-  border: 1px solid var(--red);
-  color: var(--red);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  letter-spacing: 0.05em;
-}
-.section-edit-row .del:active { background: rgba(248, 81, 73, 0.12); }
-
-/* iOS-style switch (unchanged) */
+/* iOS-style switch */
 .switch {
   position: relative;
   display: inline-block;

@@ -1,5 +1,5 @@
 /* ============================================================
-   TIMEATTACKER — v2
+   MIRAGE / TIME ATTACK — v2
    GPS time-attack PWA with map-based line drawing
    ============================================================ */
 
@@ -9,7 +9,7 @@
   // ============================================================
   // CONSTANTS
   // ============================================================
-  const STORAGE_KEY = 'timeattacker.courses.v2';
+  const STORAGE_KEY = 'mirage.courses.v2';
   const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const DEFAULT_CENTER = [35.6812, 139.7671];
   const R_EARTH = 6378137;
@@ -96,56 +96,20 @@
     return `${sign}${(Math.abs(ms) / 1000).toFixed(3)}`;
   }
 
-  /**
-   * Parse MMSS.CC numeric input → ms
-   * Accepts:
-   *   "0520.10" → 05:20.10  (MMSS.CC with dot)
-   *   "052010"  → 05:20.10  (6-digit MMSSCC)
-   *   "0520"    → 05:20.00  (4-digit MMSS)
-   */
-  function parseNumericTime(raw) {
-    if (!raw || !raw.trim()) return null;
-    const s = raw.trim();
-
-    let mm, ss, cc;
-
-    if (s.includes('.')) {
-      // MMSS.CC format
-      const dot = s.indexOf('.');
-      const intPart  = s.slice(0, dot).replace(/\D/g, '').padStart(4, '0').slice(-4);
-      const fracPart = s.slice(dot + 1).replace(/\D/g, '').padEnd(2, '0').slice(0, 2);
-      mm = parseInt(intPart.slice(0, 2), 10);
-      ss = parseInt(intPart.slice(2, 4), 10);
-      cc = parseInt(fracPart, 10);
-    } else {
-      const digits = s.replace(/\D/g, '');
-      if (digits.length >= 6) {
-        // 6 digits: MMSSCC
-        const d = digits.padStart(6, '0').slice(-6);
-        mm = parseInt(d.slice(0, 2), 10);
-        ss = parseInt(d.slice(2, 4), 10);
-        cc = parseInt(d.slice(4, 6), 10);
-      } else {
-        // 4 digits: MMSS
-        const d = digits.padStart(4, '0').slice(-4);
-        mm = parseInt(d.slice(0, 2), 10);
-        ss = parseInt(d.slice(2, 4), 10);
-        cc = 0;
-      }
+  /** Parse "M:SS" or "MM:SS" or "S" → ms. Empty → null. */
+  function parseTargetTime(s) {
+    if (!s || !s.trim()) return null;
+    const t = s.trim();
+    if (t.includes(':')) {
+      const [mm, ss] = t.split(':');
+      const m = parseInt(mm, 10);
+      const sec = parseFloat(ss);
+      if (isNaN(m) || isNaN(sec)) return null;
+      return Math.round((m * 60 + sec) * 1000);
     }
-
-    if (isNaN(mm) || isNaN(ss) || isNaN(cc)) return null;
-    if (ss >= 60 || cc >= 100) return null;
-    return mm * 60000 + ss * 1000 + cc * 10;
-  }
-
-  /** Format ms → "MM:SS.CC" for display */
-  function formatNumericDisplay(ms) {
-    if (ms == null || !isFinite(ms)) return '';
-    const mm = Math.floor(ms / 60000);
-    const ss = Math.floor((ms % 60000) / 1000);
-    const cc = Math.floor((ms % 1000) / 10);
-    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
+    const sec = parseFloat(t);
+    if (isNaN(sec)) return null;
+    return Math.round(sec * 1000);
   }
 
   function uid() {
@@ -533,9 +497,9 @@
   // DETAIL MODAL
   // ============================================================
   document.querySelector('[data-action="edit-settings"]').addEventListener('click', openDetailModal);
-  document.querySelector('[data-action="close-detail"]').addEventListener('click', closeDetailModalNoSave);
+  document.querySelector('[data-action="close-detail"]').addEventListener('click', closeDetailModal);
   document.getElementById('modal-detail').addEventListener('click', e => {
-    if (e.target.id === 'modal-detail') closeDetailModalNoSave();
+    if (e.target.id === 'modal-detail') closeDetailModal();
   });
 
   function openDetailModal() {
@@ -549,30 +513,20 @@
     document.getElementById('modal-detail').classList.add('show');
   }
 
-  /** ✕ Cancel: close without saving main settings (section deletions already committed). */
-  function closeDetailModalNoSave() {
-    document.getElementById('modal-detail').classList.remove('show');
-  }
-
-  /** 保存: read all fields, save, close. */
-  function saveAndCloseDetail() {
+  function closeDetailModal() {
     const c = getActiveCourse();
     if (c) {
       const dur = parseInt(document.getElementById('cfg-duration').value, 10);
-      c.duration  = isNaN(dur) ? 0 : dur * 60;
-      const cd  = parseFloat(document.getElementById('cfg-cooldown').value);
-      c.cooldownS = isNaN(cd)  ? DEFAULT_COOLDOWN_S : Math.max(0, cd);
+      c.duration = isNaN(dur) ? 0 : dur * 60;
+      const cd = parseFloat(document.getElementById('cfg-cooldown').value);
+      c.cooldownS = isNaN(cd) ? DEFAULT_COOLDOWN_S : Math.max(0, cd);
       const acc = parseInt(document.getElementById('cfg-acc').value, 10);
       c.accLimitM = isNaN(acc) ? DEFAULT_ACC_M : Math.max(0, acc);
       c.dirFilter = document.getElementById('cfg-dirfilter').checked;
-      // Target times: already written to c.sections in-memory on blur.
       saveCourses();
-      toast('保存しました ✓');
     }
     document.getElementById('modal-detail').classList.remove('show');
   }
-
-  document.getElementById('btn-save-detail').addEventListener('click', saveAndCloseDetail);
 
   function renderSectionsEdit() {
     const c = getActiveCourse();
@@ -585,61 +539,25 @@
     c.sections.forEach((s, idx) => {
       const row = document.createElement('div');
       row.className = 'section-edit-row';
-      // Show already-set value in formatted display, otherwise empty
-      const displayVal = s.targetMs != null ? formatNumericDisplay(s.targetMs) : '';
-
+      const targetText = s.targetMs != null ? formatTimeShort(s.targetMs).replace(/^00:/, '') : '';
       row.innerHTML = `
         <span class="name">${escapeHtml(s.name || `S${idx + 1}`)}</span>
-        <input class="target" type="text" inputmode="numeric"
-               placeholder="MMSS.CC" value="${displayVal}" />
+        <input class="target" type="text" inputmode="decimal" placeholder="M:SS" value="${targetText}" />
         <button class="del">削除</button>
       `;
-
       const inp = row.querySelector('input.target');
-
-      // Live validation highlight while typing
-      inp.addEventListener('input', () => {
-        if (!inp.value.trim()) {
-          inp.classList.remove('valid', 'invalid');
-          return;
-        }
-        const ms = parseNumericTime(inp.value);
-        inp.classList.toggle('valid',   ms != null);
-        inp.classList.toggle('invalid', ms == null);
+      inp.addEventListener('change', () => {
+        s.targetMs = parseTargetTime(inp.value);
+        saveCourses();
       });
-
-      // On blur: parse → store in-memory + reformat display
-      inp.addEventListener('blur', () => {
-        if (!inp.value.trim()) {
-          s.targetMs = null;
-          inp.classList.remove('valid', 'invalid');
-          return;
-        }
-        const ms = parseNumericTime(inp.value);
-        if (ms != null) {
-          s.targetMs = ms;
-          inp.value = formatNumericDisplay(ms); // reformat: "05:20.10"
-          inp.classList.add('valid');
-          inp.classList.remove('invalid');
-        } else {
-          inp.classList.add('invalid');
-        }
-      });
-
-      // Per-section delete — saves immediately (destructive action)
       row.querySelector('.del').addEventListener('click', () => {
-        const name = s.name || `S${idx + 1}`;
-        if (!confirm(`「${name}」を削除しますか？`)) return;
+        if (!confirm(`「${s.name}」を削除しますか？`)) return;
         c.sections.splice(idx, 1);
-        // Renumber sections that still have auto-generated names
-        c.sections.forEach((sec, i) => {
-          if (!sec.name || /^S\d+$/.test(sec.name)) sec.name = `S${i + 1}`;
-        });
+        c.sections.forEach((sec, i) => { if (!sec.name || /^S\d+$/.test(sec.name)) sec.name = `S${i + 1}`; });
         c.bestLap = null;
-        saveCourses();           // commit deletion immediately
-        renderSectionsEdit();    // re-render list
-        redrawEditLines();       // update map
-        toast(`「${name}」を削除`);
+        saveCourses();
+        renderSectionsEdit();
+        redrawEditLines();
       });
       list.appendChild(row);
     });
@@ -658,14 +576,9 @@
     resetDriveMetrics();
     renderSplitsGrid();
 
-    // Init canvas widgets — deferred to next frame so CSS layout finishes first
-    // (getBoundingClientRect returns 0 if called synchronously after display:flex)
-    state.gball = null;
-    state.speedGraph = null;
-    requestAnimationFrame(() => {
-      state.gball      = new GBall(document.getElementById('gball-canvas'));
-      state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
-    });
+    // Init canvas widgets
+    state.gball = new GBall(document.getElementById('gball-canvas'));
+    state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
 
     // CSV buffer
     state.csvRows = [];
@@ -1114,22 +1027,19 @@
         }
       }
 
-      // G-ball + speed graph — guard against canvas not ready or draw errors
-      try {
-        if (state.gball) {
-          const lat = state.g_raw.x - state.g_calib.x;
-          const lon = state.g_raw.z - state.g_calib.z;
-          state.g_lat = lat;
-          state.g_lon = lon;
-          state.gball.draw(lat, lon);
-          const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
-          document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
-        }
-        if (state.speedGraph) state.speedGraph.draw();
-      } catch (e) {
-        // Silently skip bad frame — do NOT let this stop the RAF loop
-        console.warn('Widget draw error (skipped):', e.message);
+      // G-ball update from latest motion sample
+      if (state.gball) {
+        const lat = state.g_raw.x - state.g_calib.x;
+        const lon = state.g_raw.z - state.g_calib.z;
+        state.g_lat = lat;
+        state.g_lon = lon;
+        state.gball.draw(lat, lon);
+        const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
+        document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
       }
+
+      // Speed graph render
+      if (state.speedGraph) state.speedGraph.draw();
 
       state.rafId = requestAnimationFrame(tick);
     }
@@ -1144,58 +1054,51 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.w = 0; this.h = 0;
       this.resize();
       window.addEventListener('resize', () => this.resize());
     }
     resize() {
       const dpr = window.devicePixelRatio || 1;
       const r = this.canvas.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) {
-        this.canvas.width  = Math.round(r.width  * dpr);
-        this.canvas.height = Math.round(r.height * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this.w = r.width;
-        this.h = r.height;
-      }
+      this.canvas.width = r.width * dpr;
+      this.canvas.height = r.height * dpr;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.w = r.width; this.h = r.height;
     }
     draw(lat_g, lon_g) {
-      // Attempt resize if dimensions not yet known
-      if (this.w < 1 || this.h < 1) {
-        this.resize();
-        if (this.w < 1 || this.h < 1) return; // still not ready, skip frame
-      }
       const ctx = this.ctx;
       const w = this.w, h = this.h;
       const cx = w / 2, cy = h / 2;
       const r = Math.min(w, h) / 2 - 12;
-      if (r <= 0) return; // canvas too small, skip
-      const dot = Math.max(6, r * 0.12);
+      const dot = 10;
 
       ctx.clearRect(0, 0, w, h);
+      // Outer dim ring
       ctx.fillStyle = '#0a0a0a';
       ctx.beginPath(); ctx.arc(cx, cy, r + 4, 0, Math.PI * 2); ctx.fill();
+      // Outer ring
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-      const r1g = r / G_RANGE;
-      if (r1g > 0) {
-        ctx.strokeStyle = '#2a2a2a';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(cx, cy, r1g, 0, Math.PI * 2); ctx.stroke();
-      }
+      // 1G ring
+      ctx.strokeStyle = '#2a2a2a';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, r / G_RANGE, 0, Math.PI * 2); ctx.stroke();
+      // Cross hairs
       ctx.beginPath();
       ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
       ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
       ctx.stroke();
+      // Labels
       ctx.fillStyle = '#555';
-      ctx.font = `${Math.max(8, Math.round(r * 0.15))}px "IBM Plex Mono", monospace`;
+      ctx.font = '9px "IBM Plex Mono", monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('F', cx, cy - r - 6);
       ctx.fillText('B', cx, cy + r + 6);
       ctx.fillText('L', cx - r - 8, cy);
       ctx.fillText('R', cx + r + 8, cy);
 
+      // Dot position
       let bx = cx + (lat_g / G_RANGE) * r;
       let by = cy - (lon_g / G_RANGE) * r;
       const dx = bx - cx, dy = by - cy;
@@ -1206,7 +1109,7 @@
       }
       const tg = Math.min(Math.sqrt(lat_g * lat_g + lon_g * lon_g), G_RANGE);
       const iv = tg / G_RANGE;
-      ctx.fillStyle = `rgb(${Math.round(255*iv)},${Math.round(255*Math.max(0,1-iv*1.2))},0)`;
+      ctx.fillStyle = `rgb(${Math.round(255 * iv)}, ${Math.round(255 * Math.max(0, 1 - iv * 1.2))}, 0)`;
       ctx.beginPath(); ctx.arc(bx, by, dot, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1218,22 +1121,18 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.data = [];
+      this.data = [];          // [[ts_sec, kmh], ...]
       this.cur = 0;
-      this.w = 0; this.h = 0;
       this.resize();
       window.addEventListener('resize', () => this.resize());
     }
     resize() {
       const dpr = window.devicePixelRatio || 1;
       const r = this.canvas.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) {
-        this.canvas.width  = Math.round(r.width  * dpr);
-        this.canvas.height = Math.round(r.height * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this.w = r.width;
-        this.h = r.height;
-      }
+      this.canvas.width = r.width * dpr;
+      this.canvas.height = r.height * dpr;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.w = r.width; this.h = r.height;
     }
     addPoint(ts, kmh) {
       this.cur = kmh;
@@ -1246,10 +1145,6 @@
       this.cur = 0;
     }
     draw() {
-      if (this.w < 1 || this.h < 1) {
-        this.resize();
-        if (this.w < 1 || this.h < 1) return;
-      }
       const ctx = this.ctx;
       const w = this.w, h = this.h;
       const PL = 32, PR = 6, PT = 6, PB = 18;
@@ -1408,7 +1303,7 @@
     const dt = new Date();
     const stamp = dt.toISOString().replace(/[:.]/g, '-').slice(0, 19);
     a.href = url;
-    a.download = `timeattacker_${(c?.name || 'session').replace(/\s+/g, '_')}_${stamp}.csv`;
+    a.download = `mirage_${(c?.name || 'session').replace(/\s+/g, '_')}_${stamp}.csv`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
