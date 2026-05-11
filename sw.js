@@ -1,7 +1,7 @@
 // MIRAGE / Time Attack — minimal service worker
 // Caches app shell for offline use. Map tiles fall back to network.
 
-const CACHE = 'mirage-v1';
+const CACHE = 'timeAttker-v1';
 const APP_SHELL = [
   './',
   './index.html',
