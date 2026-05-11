@@ -48,20 +48,22 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 
 /* ============== SCENE 1 : SPLASH ============== */
 #scene-splash{
-  align-items:center;justify-content:center;
+  align-items:center;justify-content:center;padding:24px;
   background:radial-gradient(ellipse at center, #1a1a28 0%, #0a0a0f 70%);
 }
-.splash-inner{text-align:center;animation:splashIn .9s ease-out both}
+.splash-inner{text-align:center;animation:splashIn .9s ease-out both;width:100%;max-width:420px}
 .splash-title{
   font-family:var(--font-display);font-weight:800;
-  font-size:54px;letter-spacing:.04em;line-height:.95;
+  font-size:clamp(34px, 13vw, 64px);
+  letter-spacing:.02em;line-height:.95;
   background:linear-gradient(180deg,#fff 0%,#9ca0b6 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   text-shadow:0 0 60px rgba(255,59,59,.35);
+  white-space:nowrap;
 }
-.splash-bar{width:60px;height:3px;background:var(--accent);margin:18px auto;border-radius:2px}
-.splash-brand{font-family:var(--font-body);font-weight:500;font-size:14px;color:var(--txt-2);letter-spacing:.4em;margin-bottom:4px}
-.splash-ver{font-family:var(--font-mono);font-size:11px;color:var(--txt-3);letter-spacing:.2em}
+.splash-bar{width:clamp(40px,12vw,68px);height:3px;background:var(--accent);margin:clamp(12px,4vw,22px) auto;border-radius:2px}
+.splash-brand{font-family:var(--font-body);font-weight:500;font-size:clamp(11px,3.4vw,15px);color:var(--txt-2);letter-spacing:.35em;margin-bottom:4px;padding-left:.35em}
+.splash-ver{font-family:var(--font-mono);font-size:clamp(9px,2.6vw,12px);color:var(--txt-3);letter-spacing:.2em}
 
 @keyframes splashIn{
   from{opacity:0;transform:translateY(10px)}
@@ -72,6 +74,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 #scene-notice{
   align-items:center;justify-content:center;padding:24px;
   background:linear-gradient(180deg,#0a0a0f 0%,#15151f 100%);
+  overflow-y:auto;
 }
 .notice-card{
   width:100%;max-width:420px;background:var(--bg-1);
@@ -261,6 +264,57 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 }
 .create-save:disabled{background:var(--bg-2);color:var(--txt-3);cursor:not-allowed}
 
+/* map */
+.map-tabs{display:flex;gap:6px;margin-bottom:10px}
+.map-tab{
+  flex:1;padding:8px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:7px;color:var(--txt-2);font-family:var(--font-mono);
+  font-size:10px;letter-spacing:.12em;cursor:pointer;text-align:center;
+}
+.map-tab.active{background:var(--accent);color:#fff;border-color:transparent}
+.map-host{
+  position:relative;width:100%;height:280px;border-radius:9px;overflow:hidden;
+  border:1px solid var(--line);background:var(--bg-2);margin-bottom:10px;
+}
+#mapEl{width:100%;height:100%}
+.map-hint{
+  position:absolute;top:8px;left:8px;right:8px;z-index:500;
+  pointer-events:none;
+  background:rgba(10,10,15,.78);backdrop-filter:blur(6px);
+  border:1px solid var(--line-h);border-radius:7px;
+  padding:7px 10px;font-family:var(--font-mono);font-size:10px;
+  color:var(--txt);letter-spacing:.05em;line-height:1.4;
+}
+.map-hint b{color:var(--accent-2)}
+.map-locate{
+  position:absolute;bottom:10px;right:10px;z-index:500;
+  width:38px;height:38px;border-radius:50%;
+  background:var(--accent);border:none;color:#fff;
+  font-size:18px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(255,59,59,.4);
+}
+.map-locate:active{transform:scale(.95)}
+/* Leaflet override for dark theme harmony */
+.leaflet-control-attribution{font-size:8px !important;background:rgba(0,0,0,.5) !important;color:#999 !important}
+.leaflet-control-attribution a{color:#bbb !important}
+.leaflet-bar a{background:var(--bg-1) !important;color:var(--txt) !important;border-color:var(--line) !important}
+.leaflet-bar a:hover{background:var(--bg-2) !important}
+.ta-marker{
+  display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg);
+  color:#fff;font-family:var(--font-display);font-weight:800;font-size:11px;
+  box-shadow:0 4px 12px rgba(0,0,0,.5);
+  border:2px solid #fff;
+}
+.ta-marker span{transform:rotate(45deg)}
+.ta-marker.start{background:linear-gradient(135deg,#22d3a1,#0e9171)}
+.ta-marker.finish{background:linear-gradient(135deg,#ff3b3b,#a8121b)}
+
+/* hide map-related sections when in current-loc mode */
+.mode-section{display:none}
+.mode-section.active{display:block}
+
 /* toast */
 #toast{
   position:fixed;left:50%;bottom:30px;transform:translate(-50%,20px);
@@ -276,6 +330,12 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Leaflet (map for course setup) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
 
@@ -404,20 +464,53 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <label>Course Name</label>
       <input id="cName" type="text" placeholder="例: 周南サーキット" maxlength="30">
     </div>
-    <div class="field">
-      <label>Start Point</label>
-      <div class="gps-capture">
-        <div class="gps-coord" id="cStart">— , —</div>
-        <button class="gps-grab" onclick="CourseUI.grab('start')">GET</button>
+
+    <div class="map-tabs">
+      <div class="map-tab active" data-mode="map"     onclick="CourseUI.setMode('map')">▣ 地図で指定</div>
+      <div class="map-tab"        data-mode="current" onclick="CourseUI.setMode('current')">◉ 現在地で取得</div>
+    </div>
+
+    <!-- map mode -->
+    <div class="mode-section active" id="mode-map">
+      <div class="map-host">
+        <div id="mapEl"></div>
+        <div class="map-hint" id="mapHint">
+          地図をタップして <b>START</b> を配置 → 再タップで <b>FINISH</b>
+        </div>
+        <button class="map-locate" onclick="CourseUI.locateMe()" title="現在地へ">◎</button>
       </div>
     </div>
-    <div class="field">
-      <label>Finish Point</label>
-      <div class="gps-capture">
-        <div class="gps-coord" id="cFinish">— , —</div>
-        <button class="gps-grab" onclick="CourseUI.grab('finish')">GET</button>
+
+    <!-- current-location mode -->
+    <div class="mode-section" id="mode-current">
+      <div class="field">
+        <label>Start Point</label>
+        <div class="gps-capture">
+          <div class="gps-coord" id="cStart">— , —</div>
+          <button class="gps-grab" onclick="CourseUI.grab('start')">GET</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Finish Point</label>
+        <div class="gps-capture">
+          <div class="gps-coord" id="cFinish">— , —</div>
+          <button class="gps-grab" onclick="CourseUI.grab('finish')">GET</button>
+        </div>
       </div>
     </div>
+
+    <!-- common readout (shows captured points regardless of mode) -->
+    <div class="field" style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label>START</label>
+        <div class="gps-coord" id="cStartRO">— , —</div>
+      </div>
+      <div style="flex:1">
+        <label>FINISH</label>
+        <div class="gps-coord" id="cFinishRO">— , —</div>
+      </div>
+    </div>
+
     <button class="create-save" id="cSave" disabled onclick="CourseUI.save()">SAVE COURSE</button>
   </div>
 
@@ -826,11 +919,92 @@ const UI = (() => {
 })();
 
 /* ============================================================
-   COURSE UI
+   COURSE UI  (with Leaflet map integration)
 ============================================================ */
 const CourseUI = (() => {
   const draft = {start:null, finish:null};
+  let map = null;
+  let markers = {start:null, finish:null};
+  let mode = 'map';
+  let nextPoint = 'start';   // which point the next map-tap will assign
 
+  /* ---------- mode tab ---------- */
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('.map-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.mode === m));
+    document.getElementById('mode-map').classList.toggle('active', m === 'map');
+    document.getElementById('mode-current').classList.toggle('active', m === 'current');
+    if (m === 'map') {
+      // ensure leaflet re-measures after becoming visible
+      setTimeout(() => { if (map) map.invalidateSize(); }, 60);
+    }
+  }
+
+  /* ---------- map setup ---------- */
+  function initMap() {
+    if (map) return;
+    if (typeof L === 'undefined') {
+      // Leaflet is still loading (deferred). Retry shortly.
+      setTimeout(initMap, 150);
+      return;
+    }
+    const fix = GPS.getLast();
+    const center = fix ? [fix.lat, fix.lng] : [34.0556, 131.8062]; // Tokuyama default
+    map = L.map('mapEl', {
+      zoomControl:true, attributionControl:true,
+      tap:true,
+    }).setView(center, fix ? 17 : 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap',
+    }).addTo(map);
+
+    map.on('click', e => {
+      placePoint(nextPoint, e.latlng.lat, e.latlng.lng);
+      nextPoint = (nextPoint === 'start') ? 'finish' : 'start';
+      updateHint();
+    });
+  }
+
+  function placePoint(which, lat, lng) {
+    draft[which] = {lat, lng};
+    // marker
+    if (markers[which]) markers[which].setLatLng([lat, lng]);
+    else {
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="ta-marker ${which}"><span>${which==='start'?'S':'F'}</span></div>`,
+        iconSize:[34,34], iconAnchor:[17,34],
+      });
+      markers[which] = L.marker([lat, lng], {icon, draggable:true}).addTo(map);
+      markers[which].on('dragend', ev => {
+        const p = ev.target.getLatLng();
+        draft[which] = {lat:p.lat, lng:p.lng};
+        refreshReadout();
+        refreshSaveBtn();
+      });
+    }
+    refreshReadout();
+    refreshSaveBtn();
+  }
+
+  function updateHint() {
+    const h = document.getElementById('mapHint');
+    if (!h) return;
+    if (!draft.start)       h.innerHTML = '地図をタップして <b>START</b> を配置';
+    else if (!draft.finish) h.innerHTML = '<b>START</b> 設定済 → 次のタップで <b>FINISH</b>';
+    else                    h.innerHTML = '配置完了。マーカーをドラッグで微調整可 / 再タップで <b>' + (nextPoint==='start'?'START':'FINISH') + '</b> を上書き';
+  }
+
+  function locateMe() {
+    const fix = GPS.getLast();
+    if (!fix) { showToast('GPS取得待ち...'); return; }
+    if (map) map.setView([fix.lat, fix.lng], 17);
+  }
+
+  /* ---------- current-location capture ---------- */
   function grab(which) {
     const fix = GPS.getLast();
     if (!fix) { showToast('GPS取得待ち...'); return; }
@@ -838,7 +1012,26 @@ const CourseUI = (() => {
     const el = document.getElementById(which === 'start' ? 'cStart' : 'cFinish');
     el.textContent = fix.lat.toFixed(5) + ' , ' + fix.lng.toFixed(5);
     el.classList.add('captured');
+    // also reflect on the map if initialized
+    if (map) placePoint(which, fix.lat, fix.lng);
+    refreshReadout();
     refreshSaveBtn();
+  }
+
+  /* ---------- shared readout / save guard ---------- */
+  function refreshReadout() {
+    const sRO = document.getElementById('cStartRO');
+    const fRO = document.getElementById('cFinishRO');
+    if (draft.start)  { sRO.textContent = draft.start.lat.toFixed(5)+' , '+draft.start.lng.toFixed(5);  sRO.classList.add('captured'); }
+    else              { sRO.textContent = '— , —';  sRO.classList.remove('captured'); }
+    if (draft.finish) { fRO.textContent = draft.finish.lat.toFixed(5)+' , '+draft.finish.lng.toFixed(5); fRO.classList.add('captured'); }
+    else              { fRO.textContent = '— , —'; fRO.classList.remove('captured'); }
+
+    // sync current-mode readouts too
+    const s = document.getElementById('cStart');
+    const f = document.getElementById('cFinish');
+    if (s) { s.textContent = sRO.textContent; s.classList.toggle('captured', !!draft.start); }
+    if (f) { f.textContent = fRO.textContent; f.classList.toggle('captured', !!draft.finish); }
   }
 
   function refreshSaveBtn() {
@@ -846,6 +1039,7 @@ const CourseUI = (() => {
     document.getElementById('cSave').disabled = !(name && draft.start && draft.finish);
   }
 
+  /* ---------- save ---------- */
   async function save() {
     const name = document.getElementById('cName').value.trim();
     if (!name || !draft.start || !draft.finish) return;
@@ -853,22 +1047,29 @@ const CourseUI = (() => {
       name, start: draft.start, finish: draft.finish,
       createdAt: Date.now(),
     });
+    // reset draft + UI
     document.getElementById('cName').value = '';
     draft.start = null; draft.finish = null;
-    document.getElementById('cStart').textContent = '— , —';
-    document.getElementById('cStart').classList.remove('captured');
-    document.getElementById('cFinish').textContent = '— , —';
-    document.getElementById('cFinish').classList.remove('captured');
+    nextPoint = 'start';
+    if (markers.start)  { map.removeLayer(markers.start);  markers.start  = null; }
+    if (markers.finish) { map.removeLayer(markers.finish); markers.finish = null; }
+    refreshReadout();
     refreshSaveBtn();
+    updateHint();
     showToast('コースを保存しました');
     render();
   }
 
+  /* ---------- list / select / delete ---------- */
   async function render() {
+    // boot map lazily when this scene is first visited
+    initMap();
+    setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+
     const list = document.getElementById('courseList');
     const courses = await DB.listCourses();
     if (!courses.length) {
-      list.innerHTML = '<div class="empty">コース未登録<br>GPS取得後、上のフォームから作成してください</div>';
+      list.innerHTML = '<div class="empty">コース未登録<br>地図またはGPSから作成してください</div>';
       return;
     }
     const active = Timer.getCourse();
@@ -903,12 +1104,12 @@ const CourseUI = (() => {
     render();
   }
 
-  // wire up name input
+  // name input -> live save-btn guard
   document.addEventListener('input', e => {
     if (e.target && e.target.id === 'cName') refreshSaveBtn();
   });
 
-  return {grab, save, render, select, del};
+  return {grab, save, render, select, del, setMode, locateMe};
 })();
 
 /* ============================================================
