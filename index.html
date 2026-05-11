@@ -1,225 +1,1032 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-  <meta name="theme-color" content="#0a0c10" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>MIRAGE / Time Attack</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>TIME ATTACKER</title>
 
-  <link rel="manifest" href="manifest.json" />
+<style>
+/* ============================================================
+   TIME ATTACKER  Ver.1.0   藤井工藝
+   ------------------------------------------------------------
+   Layer Structure
+     :root            -> design tokens
+     #scene-*         -> full-screen scenes (splash / notice / main / courses / records)
+     .panel / .card   -> shared building blocks
+     #gball / #speed  -> instrument widgets
+============================================================ */
 
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
+:root{
+  --bg:#0a0a0f;
+  --bg-1:#101018;
+  --bg-2:#171722;
+  --line:rgba(255,255,255,.07);
+  --line-h:rgba(255,255,255,.14);
+  --txt:#f2f3f8;
+  --txt-2:#9ca0b6;
+  --txt-3:#5a5e75;
+  --accent:#ff3b3b;        /* racing red       */
+  --accent-2:#ffb800;      /* warning amber    */
+  --good:#22d3a1;          /* green            */
+  --bad:#ff4d6d;
+  --shadow:0 10px 40px rgba(0,0,0,.55);
+  --font-display:'Syne','Bebas Neue',system-ui,sans-serif;
+  --font-mono:'DM Mono','SF Mono',ui-monospace,monospace;
+  --font-body:'Noto Sans JP',system-ui,sans-serif;
+}
 
-  <link rel="stylesheet" href="styles.css" />
+html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--font-body);-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+
+/* ============== SCENE BASE ============== */
+.scene{position:fixed;inset:0;display:none;flex-direction:column;background:var(--bg);z-index:1}
+.scene.active{display:flex}
+
+/* ============== SCENE 1 : SPLASH ============== */
+#scene-splash{
+  align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center, #1a1a28 0%, #0a0a0f 70%);
+}
+.splash-inner{text-align:center;animation:splashIn .9s ease-out both}
+.splash-title{
+  font-family:var(--font-display);font-weight:800;
+  font-size:54px;letter-spacing:.04em;line-height:.95;
+  background:linear-gradient(180deg,#fff 0%,#9ca0b6 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 0 60px rgba(255,59,59,.35);
+}
+.splash-bar{width:60px;height:3px;background:var(--accent);margin:18px auto;border-radius:2px}
+.splash-brand{font-family:var(--font-body);font-weight:500;font-size:14px;color:var(--txt-2);letter-spacing:.4em;margin-bottom:4px}
+.splash-ver{font-family:var(--font-mono);font-size:11px;color:var(--txt-3);letter-spacing:.2em}
+
+@keyframes splashIn{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ============== SCENE 2 : NOTICE ============== */
+#scene-notice{
+  align-items:center;justify-content:center;padding:24px;
+  background:linear-gradient(180deg,#0a0a0f 0%,#15151f 100%);
+}
+.notice-card{
+  width:100%;max-width:420px;background:var(--bg-1);
+  border:1px solid var(--line);border-radius:14px;
+  padding:26px 22px;box-shadow:var(--shadow);
+}
+.notice-head{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.notice-icon{
+  width:36px;height:36px;border-radius:9px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  display:grid;place-items:center;font-size:20px;color:#fff;font-weight:800;
+  box-shadow:0 4px 16px rgba(255,59,59,.4);
+}
+.notice-title-jp{font-size:15px;font-weight:700;color:var(--txt);line-height:1.3}
+.notice-title-en{font-family:var(--font-mono);font-size:10px;color:var(--txt-3);letter-spacing:.15em;margin-top:2px}
+
+.notice-list{display:flex;flex-direction:column;gap:14px;margin-bottom:22px}
+.notice-item{display:flex;gap:12px;align-items:flex-start}
+.notice-no{
+  flex-shrink:0;width:22px;height:22px;border-radius:50%;
+  background:var(--bg-2);border:1px solid var(--line-h);
+  display:grid;place-items:center;font-family:var(--font-mono);
+  font-size:11px;font-weight:600;color:var(--accent-2);
+}
+.notice-text{flex:1;font-size:13px;line-height:1.5;color:var(--txt)}
+.notice-text .en{display:block;font-family:var(--font-mono);font-size:10.5px;color:var(--txt-3);margin-top:3px;letter-spacing:.02em}
+
+.notice-ok{
+  width:100%;padding:14px;background:var(--accent);
+  border:none;border-radius:10px;color:#fff;
+  font-family:var(--font-display);font-weight:700;font-size:15px;
+  letter-spacing:.15em;cursor:pointer;transition:all .15s;
+  box-shadow:0 6px 24px rgba(255,59,59,.35);
+}
+.notice-ok:active{transform:translateY(1px);box-shadow:0 3px 12px rgba(255,59,59,.3)}
+
+/* ============== SCENE 3 : MAIN DASHBOARD ============== */
+#scene-main{padding:14px 14px 18px;gap:12px;overflow-y:auto}
+
+/* status bar */
+.statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 12px;background:var(--bg-1);border:1px solid var(--line);
+  border-radius:10px;flex-shrink:0;
+}
+.sb-l{display:flex;align-items:center;gap:8px}
+.sb-brand{font-family:var(--font-display);font-weight:800;font-size:13px;letter-spacing:.05em}
+.sb-brand em{color:var(--accent);font-style:normal}
+.sb-course{font-family:var(--font-mono);font-size:10px;color:var(--txt-2);padding:2px 7px;background:var(--bg-2);border-radius:4px;border:1px solid var(--line)}
+.sb-r{display:flex;gap:6px}
+.sb-gps{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;display:flex;align-items:center;gap:4px}
+.sb-gps::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--txt-3)}
+.sb-gps.ok::before{background:var(--good);box-shadow:0 0 8px var(--good)}
+.sb-gps.warn::before{background:var(--accent-2)}
+
+/* instrument grid */
+.instr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.panel{
+  background:var(--bg-1);border:1px solid var(--line);
+  border-radius:12px;padding:12px;position:relative;overflow:hidden;
+}
+.panel-label{font-family:var(--font-mono);font-size:9px;color:var(--txt-3);letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px}
+
+/* speed */
+.speed-value{font-family:var(--font-display);font-weight:800;font-size:54px;line-height:1;letter-spacing:-.02em;color:var(--txt)}
+.speed-unit{font-family:var(--font-mono);font-size:11px;color:var(--txt-2);margin-top:2px;letter-spacing:.15em}
+
+/* gball */
+#gball-wrap{aspect-ratio:1;display:grid;place-items:center;padding-top:4px}
+#gball{
+  width:100%;max-width:160px;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at center, #1c1c2a 0%, #0e0e16 80%);
+  border:1.5px solid var(--line-h);position:relative;overflow:hidden;
+}
+#gball::before,#gball::after{content:'';position:absolute;background:rgba(255,255,255,.06)}
+#gball::before{left:50%;top:0;bottom:0;width:1px;transform:translateX(-.5px)}
+#gball::after{top:50%;left:0;right:0;height:1px;transform:translateY(-.5px)}
+.gball-ring{position:absolute;border:1px dashed rgba(255,255,255,.08);border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+.gball-ring.r1{width:33%;height:33%}
+.gball-ring.r2{width:66%;height:66%}
+#gball-dot{
+  position:absolute;width:18px;height:18px;border-radius:50%;
+  background:radial-gradient(circle,#ff5b5b 0%,#cc1414 100%);
+  box-shadow:0 0 14px rgba(255,59,59,.6),0 0 4px rgba(255,255,255,.25) inset;
+  left:50%;top:50%;transform:translate(-50%,-50%);
+  transition:transform .06s linear;
+}
+.gball-readout{display:flex;justify-content:space-between;margin-top:6px;font-family:var(--font-mono);font-size:10px;color:var(--txt-2)}
+.gball-readout span b{color:var(--txt);font-weight:600}
+
+/* timer panel */
+.timer-panel{grid-column:1/-1}
+.timer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-top:4px}
+.timer-block .lbl{font-family:var(--font-mono);font-size:9px;color:var(--txt-3);letter-spacing:.18em;margin-bottom:3px}
+.timer-block .val{font-family:var(--font-display);font-weight:800;letter-spacing:-.01em;line-height:1}
+.timer-current .val{font-size:34px;color:var(--accent)}
+.timer-best .val{font-size:18px;color:var(--good)}
+.timer-last .val{font-size:18px;color:var(--txt)}
+
+/* action row */
+.actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.act-btn{
+  padding:12px 6px;background:var(--bg-2);border:1px solid var(--line-h);
+  border-radius:10px;color:var(--txt);font-family:var(--font-mono);
+  font-size:11px;letter-spacing:.1em;cursor:pointer;transition:all .15s;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.act-btn:active{transform:scale(.97)}
+.act-btn .ico{font-size:18px;line-height:1}
+.act-btn.primary{background:var(--accent);border-color:transparent;color:#fff;box-shadow:0 4px 16px rgba(255,59,59,.3)}
+.act-btn.primary.armed{background:var(--good);box-shadow:0 4px 16px rgba(34,211,161,.35)}
+.act-btn.primary.running{background:var(--accent-2);color:#1a1a1a;box-shadow:0 4px 16px rgba(255,184,0,.35)}
+
+/* secondary nav */
+.nav-row{display:flex;gap:8px}
+.nav-btn{
+  flex:1;padding:10px;background:var(--bg-1);border:1px solid var(--line);
+  border-radius:9px;color:var(--txt-2);font-family:var(--font-mono);
+  font-size:10.5px;letter-spacing:.12em;cursor:pointer;transition:all .15s;
+}
+.nav-btn:active{background:var(--bg-2);color:var(--txt)}
+
+/* ============== SCENE 4 / 5 : COURSES / RECORDS ============== */
+#scene-courses,#scene-records{padding:14px;gap:12px;overflow-y:auto}
+
+.subhead{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:10px;border-bottom:1px solid var(--line);
+}
+.subhead h2{font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:.04em}
+.back-btn{
+  padding:7px 12px;background:var(--bg-1);border:1px solid var(--line);
+  border-radius:7px;color:var(--txt-2);font-family:var(--font-mono);
+  font-size:10px;letter-spacing:.1em;cursor:pointer;
+}
+.back-btn:active{color:var(--txt)}
+
+/* course list */
+.list{display:flex;flex-direction:column;gap:8px}
+.list-item{
+  background:var(--bg-1);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.list-item.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.li-main{flex:1;min-width:0}
+.li-title{font-size:14px;font-weight:600;color:var(--txt);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li-sub{font-family:var(--font-mono);font-size:10px;color:var(--txt-3);letter-spacing:.05em}
+.li-acts{display:flex;gap:6px;flex-shrink:0}
+.li-btn{
+  padding:6px 10px;background:var(--bg-2);border:1px solid var(--line-h);
+  border-radius:6px;color:var(--txt-2);font-family:var(--font-mono);
+  font-size:10px;cursor:pointer;
+}
+.li-btn:active{color:var(--txt)}
+.li-btn.danger:active{color:var(--bad);border-color:var(--bad)}
+
+.empty{
+  padding:30px 14px;text-align:center;color:var(--txt-3);
+  font-size:12px;background:var(--bg-1);border:1px dashed var(--line-h);border-radius:10px;
+}
+
+/* course create */
+.create-card{
+  background:var(--bg-1);border:1px solid var(--line);border-radius:12px;padding:14px;
+}
+.create-card .field{margin-bottom:12px}
+.create-card label{display:block;font-family:var(--font-mono);font-size:9.5px;color:var(--txt-3);letter-spacing:.18em;margin-bottom:6px;text-transform:uppercase}
+.create-card input{
+  width:100%;padding:10px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:7px;color:var(--txt);font-family:var(--font-body);font-size:13px;outline:none;
+}
+.create-card input:focus{border-color:var(--accent)}
+.gps-capture{display:flex;align-items:center;gap:8px}
+.gps-coord{
+  flex:1;padding:9px 10px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:7px;font-family:var(--font-mono);font-size:10.5px;color:var(--txt-2);
+}
+.gps-coord.captured{color:var(--good);border-color:var(--good)}
+.gps-grab{
+  padding:9px 12px;background:var(--accent-2);border:none;border-radius:7px;
+  color:#1a1a1a;font-family:var(--font-mono);font-size:10.5px;font-weight:700;cursor:pointer;
+}
+.create-save{
+  width:100%;padding:12px;background:var(--accent);border:none;border-radius:9px;
+  color:#fff;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.15em;cursor:pointer;margin-top:6px;
+}
+.create-save:disabled{background:var(--bg-2);color:var(--txt-3);cursor:not-allowed}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:30px;transform:translate(-50%,20px);
+  background:var(--bg-1);border:1px solid var(--line-h);
+  padding:10px 18px;border-radius:30px;font-size:12px;color:var(--txt);
+  opacity:0;transition:all .3s;z-index:9999;pointer-events:none;
+  box-shadow:var(--shadow);
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- ====== HOME SCREEN ====== -->
-  <section id="screen-home" class="screen active">
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">◢</span>
-        <span class="brand-name">MIRAGE</span>
-        <span class="brand-sub">/ TIME ATTACK</span>
-      </div>
-    </header>
+<!-- ============ SCENE 1 : SPLASH ============ -->
+<section id="scene-splash" class="scene active">
+  <div class="splash-inner">
+    <div class="splash-title">TIME<br>ATTACKER</div>
+    <div class="splash-bar"></div>
+    <div class="splash-brand">藤井工藝</div>
+    <div class="splash-ver">Ver. 1.0</div>
+  </div>
+</section>
 
-    <main class="home-main">
-      <div class="section-title">
-        <span class="dot"></span>
-        <span>COURSES</span>
-      </div>
-
-      <div id="course-list" class="course-list"></div>
-
-      <button id="btn-new-course" class="btn-primary big">
-        <span class="plus">+</span>
-        <span>新規コースを作成</span>
-      </button>
-
-      <div class="hint">
-        マップ上で線を引き、スタート / ゴール / セクションを定義します。
-      </div>
-    </main>
-  </section>
-
-  <!-- ====== EDIT SCREEN ====== -->
-  <section id="screen-edit" class="screen">
-    <header class="topbar">
-      <button class="icon-btn" data-action="back-home">‹</button>
-      <input id="course-name" class="course-name-input" type="text" placeholder="コース名" />
-      <button class="icon-btn" data-action="edit-settings" title="詳細">⚙</button>
-      <button class="icon-btn" data-action="delete-course" title="削除">✕</button>
-    </header>
-
-    <div class="edit-mode-bar">
-      <button class="mode-btn" data-mode="start">スタート線</button>
-      <button class="mode-btn" data-mode="finish">フィニッシュ線</button>
-      <button class="mode-btn" data-mode="section">セクション線</button>
-      <button class="icon-btn locate-btn" data-action="locate-me" title="現在地へ">⌖</button>
-      <div class="course-type">
-        <label>
-          <input type="checkbox" id="circuit-toggle" />
-          <span>周回</span>
-        </label>
+<!-- ============ SCENE 2 : NOTICE ============ -->
+<section id="scene-notice" class="scene">
+  <div class="notice-card">
+    <div class="notice-head">
+      <div class="notice-icon">!</div>
+      <div>
+        <div class="notice-title-jp">安全のためご注意ください</div>
+        <div class="notice-title-en">SAFETY NOTICE</div>
       </div>
     </div>
-
-    <div id="edit-status" class="status-strip">マップ上で線を引いてください</div>
-
-    <div id="map-edit" class="map"></div>
-
-    <div class="bottom-bar">
-      <button id="btn-clear-section" class="btn-ghost">セクション全消去</button>
-      <button id="btn-start-drive" class="btn-primary">計測 ▶</button>
+    <div class="notice-list">
+      <div class="notice-item">
+        <div class="notice-no">1</div>
+        <div class="notice-text">運転中に操作しないでください<span class="en">Do not operate while driving.</span></div>
+      </div>
+      <div class="notice-item">
+        <div class="notice-no">2</div>
+        <div class="notice-text">よそ見をしないでください<span class="en">Do not take your eyes off the road.</span></div>
+      </div>
+      <div class="notice-item">
+        <div class="notice-no">3</div>
+        <div class="notice-text">GPS測定のため誤差が生じる場合があります<span class="en">Measurements rely on GPS and may contain errors.</span></div>
+      </div>
     </div>
-  </section>
+    <button class="notice-ok" id="noticeOk">OK / I AGREE</button>
+  </div>
+</section>
 
-  <!-- ====== DETAIL MODAL ====== -->
-  <div id="modal-detail" class="modal">
-    <div class="modal-sheet">
-      <header class="modal-header">
-        <h3>コース詳細</h3>
-        <button class="icon-btn" data-action="close-detail">✕</button>
-      </header>
-      <div class="modal-body">
+<!-- ============ SCENE 3 : MAIN ============ -->
+<section id="scene-main" class="scene">
 
-        <div class="form-row">
-          <label>走行時間（分）</label>
-          <input id="cfg-duration" type="number" inputmode="numeric" min="0" step="1" placeholder="0 = 無制限" />
+  <div class="statusbar">
+    <div class="sb-l">
+      <div class="sb-brand">TIME<em>ATTACKER</em></div>
+      <div class="sb-course" id="sbCourse">NO COURSE</div>
+    </div>
+    <div class="sb-r">
+      <div class="sb-gps" id="sbGps">GPS</div>
+    </div>
+  </div>
+
+  <div class="instr">
+    <!-- speed -->
+    <div class="panel">
+      <div class="panel-label">SPEED</div>
+      <div class="speed-value" id="speedValue">0</div>
+      <div class="speed-unit">KM / H</div>
+    </div>
+    <!-- gball -->
+    <div class="panel">
+      <div class="panel-label">G-METER</div>
+      <div id="gball-wrap">
+        <div id="gball">
+          <div class="gball-ring r1"></div>
+          <div class="gball-ring r2"></div>
+          <div id="gball-dot"></div>
         </div>
-
-        <div class="form-row">
-          <label>クールダウン（秒）</label>
-          <input id="cfg-cooldown" type="number" inputmode="decimal" min="0" step="0.1" />
-        </div>
-
-        <div class="form-row">
-          <label>GPS精度フィルタ（m）</label>
-          <input id="cfg-acc" type="number" inputmode="numeric" min="0" step="1" />
-        </div>
-
-        <div class="form-row">
-          <label>進行方向フィルタ</label>
-          <label class="switch">
-            <input id="cfg-dirfilter" type="checkbox" />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="hint-block">
-          ・精度フィルタ 0 = フィルタ無効<br>
-          ・進行方向フィルタ ON: 初回通過方向と逆向きの通過は無視
-        </div>
-
-        <div class="form-divider"></div>
-
-        <div class="section-title small"><span class="dot"></span><span>セクション目標タイム</span></div>
-        <div id="sections-edit-list" class="sections-edit-list">
-          <div class="splits-empty">セクション線を描くと表示されます</div>
-        </div>
-
+      </div>
+      <div class="gball-readout">
+        <span>LAT <b id="gLat">0.00</b></span>
+        <span>LON <b id="gLon">0.00</b></span>
       </div>
     </div>
   </div>
 
-  <!-- ====== DRIVE SCREEN ====== -->
-  <section id="screen-drive" class="screen">
-    <header class="topbar drive-topbar">
-      <button class="icon-btn" data-action="exit-drive">‹</button>
-      <div class="drive-title">
-        <span id="drive-course-name">--</span>
-        <span class="drive-state" id="drive-state">準備中</span>
+  <!-- timer -->
+  <div class="panel timer-panel">
+    <div class="panel-label">LAP TIMER</div>
+    <div class="timer-grid">
+      <div class="timer-block timer-current">
+        <div class="lbl">CURRENT</div>
+        <div class="val" id="tCurrent">00:00.00</div>
       </div>
-      <div class="gps-indicator" id="gps-indicator">
-        <span class="gps-dot"></span>
-        <span id="gps-acc">--</span>
+      <div class="timer-block timer-best">
+        <div class="lbl">BEST</div>
+        <div class="val" id="tBest">--:--.--</div>
       </div>
-    </header>
+      <div class="timer-block timer-last">
+        <div class="lbl">LAST</div>
+        <div class="val" id="tLast">--:--.--</div>
+      </div>
+    </div>
+  </div>
 
-    <main class="drive-main">
+  <!-- actions -->
+  <div class="actions">
+    <button class="act-btn primary" id="armBtn">
+      <span class="ico">▶</span><span id="armLbl">ARM</span>
+    </button>
+    <button class="act-btn" id="calibBtn">
+      <span class="ico">◎</span><span>ZERO G</span>
+    </button>
+    <button class="act-btn" id="resetBtn">
+      <span class="ico">↺</span><span>RESET</span>
+    </button>
+  </div>
 
-      <button id="btn-start-stop" class="big-action start">START</button>
+  <div class="nav-row">
+    <button class="nav-btn" onclick="UI.go('courses')">▢ COURSES</button>
+    <button class="nav-btn" onclick="UI.go('records')">▤ RECORDS</button>
+  </div>
+</section>
 
-      <div class="status-grid">
-        <div class="status-cell">
-          <div class="status-label">LAP</div>
-          <div id="lap-count" class="status-value">0</div>
+<!-- ============ SCENE 4 : COURSES ============ -->
+<section id="scene-courses" class="scene">
+  <div class="subhead">
+    <h2>COURSES</h2>
+    <button class="back-btn" onclick="UI.go('main')">◀ BACK</button>
+  </div>
+
+  <div class="create-card">
+    <div class="field">
+      <label>Course Name</label>
+      <input id="cName" type="text" placeholder="例: 周南サーキット" maxlength="30">
+    </div>
+    <div class="field">
+      <label>Start Point</label>
+      <div class="gps-capture">
+        <div class="gps-coord" id="cStart">— , —</div>
+        <button class="gps-grab" onclick="CourseUI.grab('start')">GET</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Finish Point</label>
+      <div class="gps-capture">
+        <div class="gps-coord" id="cFinish">— , —</div>
+        <button class="gps-grab" onclick="CourseUI.grab('finish')">GET</button>
+      </div>
+    </div>
+    <button class="create-save" id="cSave" disabled onclick="CourseUI.save()">SAVE COURSE</button>
+  </div>
+
+  <div class="subhead" style="border:none;padding:0;margin-top:4px">
+    <h2 style="font-size:14px">SAVED</h2>
+  </div>
+  <div class="list" id="courseList"></div>
+</section>
+
+<!-- ============ SCENE 5 : RECORDS ============ -->
+<section id="scene-records" class="scene">
+  <div class="subhead">
+    <h2>RECORDS</h2>
+    <button class="back-btn" onclick="UI.go('main')">◀ BACK</button>
+  </div>
+  <div class="list" id="recordList"></div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   TIME ATTACKER  Ver.1.0
+   ------------------------------------------------------------
+   Modules:
+     DB     -> IndexedDB persistence (courses / laps)
+     GPS    -> geolocation watcher, speed calc
+     Motion -> DeviceMotion handler, G calibration
+     Timer  -> lap timer state
+     UI     -> scene routing, rendering
+     CourseUI / RecordUI -> screen-specific controllers
+============================================================ */
+
+'use strict';
+
+/* ========== CONSTANTS ========== */
+const APP_VER     = '1.0';
+const FINISH_RADIUS_M = 30;     // meters within finish to register lap
+const MIN_LAP_MS  = 5000;       // ignore implausibly short laps
+const G_MAX       = 1.5;        // gball edge corresponds to ±1.5G
+const DB_NAME     = 'TimeAttackerDB';
+const DB_VER      = 1;
+
+/* ============================================================
+   DB MODULE
+============================================================ */
+const DB = (() => {
+  let db = null;
+
+  function open() {
+    return new Promise((res, rej) => {
+      const req = indexedDB.open(DB_NAME, DB_VER);
+      req.onupgradeneeded = e => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains('courses')) {
+          const s = d.createObjectStore('courses', {keyPath:'id', autoIncrement:true});
+          s.createIndex('name','name',{unique:false});
+        }
+        if (!d.objectStoreNames.contains('laps')) {
+          const s = d.createObjectStore('laps', {keyPath:'id', autoIncrement:true});
+          s.createIndex('courseId','courseId',{unique:false});
+        }
+      };
+      req.onsuccess = e => { db = e.target.result; res(db); };
+      req.onerror   = e => rej(e.target.error);
+    });
+  }
+
+  function tx(store, mode='readonly') {
+    return db.transaction(store, mode).objectStore(store);
+  }
+
+  function reqP(r) {
+    return new Promise((res, rej) => {
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    });
+  }
+
+  return {
+    init: open,
+    addCourse:  c => reqP(tx('courses','readwrite').add(c)),
+    listCourses:() => reqP(tx('courses').getAll()),
+    delCourse:  id => reqP(tx('courses','readwrite').delete(id)),
+    addLap:     l => reqP(tx('laps','readwrite').add(l)),
+    listLaps:   () => reqP(tx('laps').getAll()),
+    lapsByCourse: id => new Promise((res, rej) => {
+      const idx = tx('laps').index('courseId');
+      const r = idx.getAll(id);
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    }),
+    delLap: id => reqP(tx('laps','readwrite').delete(id)),
+  };
+})();
+
+/* ============================================================
+   GPS MODULE
+============================================================ */
+const GPS = (() => {
+  let watchId = null;
+  let last = null;            // last fix {lat,lng,t}
+  let onUpdate = null;
+
+  function start(cb) {
+    onUpdate = cb;
+    if (!navigator.geolocation) { setStatus('no-api'); return; }
+    setStatus('searching');
+    watchId = navigator.geolocation.watchPosition(
+      pos => {
+        const fix = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed,   // m/s, may be null
+          t: pos.timestamp,
+        };
+        // fallback speed calc if device omits speed
+        if (fix.speed == null && last) {
+          const d  = haversine(last, fix);
+          const dt = (fix.t - last.t) / 1000;
+          if (dt > 0) fix.speed = d / dt;
+        }
+        last = fix;
+        setStatus(fix.accuracy < 25 ? 'ok' : 'warn');
+        if (onUpdate) onUpdate(fix);
+      },
+      err => setStatus('error'),
+      {enableHighAccuracy:true, maximumAge:500, timeout:10000}
+    );
+  }
+
+  function stop() {
+    if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+
+  function getLast() { return last; }
+
+  function setStatus(s) {
+    const el = document.getElementById('sbGps');
+    if (!el) return;
+    el.classList.remove('ok','warn');
+    if (s === 'ok')   el.classList.add('ok');
+    if (s === 'warn') el.classList.add('warn');
+    el.textContent = {
+      'no-api':'NO GPS', searching:'GPS...', ok:'GPS OK',
+      warn:'GPS LOW', error:'GPS ERR'
+    }[s] || 'GPS';
+  }
+
+  return {start, stop, getLast};
+})();
+
+// Haversine distance in meters between two {lat,lng}
+function haversine(a, b) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* ============================================================
+   MOTION MODULE  (G-meter)
+   ------------------------------------------------------------
+   Device orientation assumption:
+     - phone held VERTICAL, screen parallel to driver's face
+     - front camera at the TOP of the screen
+   Axis mapping (DeviceMotion.acceleration*):
+     - x  -> lateral G   (right = +)
+     - y  -> vertical    (gravity ~ +9.8)  [not displayed]
+     - z  -> longitudinal (forward/back of car)
+   We use -z so that:
+     - acceleration  -> +G  (dot moves UP in gball)
+     - braking       -> -G  (dot moves DOWN)
+============================================================ */
+const Motion = (() => {
+  let listening = false;
+  let offsetX = 0, offsetZ = 0;
+  let curG = {lat:0, lon:0};
+
+  async function start() {
+    if (listening) return true;
+    // iOS 13+ requires explicit permission
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      try {
+        const p = await DeviceMotionEvent.requestPermission();
+        if (p !== 'granted') return false;
+      } catch(e) { return false; }
+    }
+    window.addEventListener('devicemotion', onMotion);
+    listening = true;
+    return true;
+  }
+
+  function onMotion(e) {
+    // prefer gravity-excluded acceleration when available
+    const a = e.acceleration && e.acceleration.x != null
+              ? e.acceleration
+              : e.accelerationIncludingGravity;
+    if (!a) return;
+
+    const rawX = a.x || 0;
+    const rawZ = a.z || 0;
+
+    // convert m/s^2 to G (1G = 9.80665)
+    const gx = (rawX - offsetX) / 9.80665;
+    const gz = -(rawZ - offsetZ) / 9.80665;   // sign flipped, see header
+
+    curG.lat = gx;
+    curG.lon = gz;
+
+    renderGBall(gx, gz);
+  }
+
+  function renderGBall(gx, gz) {
+    const dot = document.getElementById('gball-dot');
+    const ball = document.getElementById('gball');
+    if (!dot || !ball) return;
+    const r = ball.clientWidth / 2 - 12;
+    const dx = Math.max(-1, Math.min(1, gx / G_MAX)) * r;
+    const dy = Math.max(-1, Math.min(1, gz / G_MAX)) * r * -1; // up = +G
+    dot.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+    const elLat = document.getElementById('gLat');
+    const elLon = document.getElementById('gLon');
+    if (elLat) elLat.textContent = gx.toFixed(2);
+    if (elLon) elLon.textContent = gz.toFixed(2);
+  }
+
+  function calibrate() {
+    // snapshot current raw accel and use it as the new zero
+    // we cheat slightly: read one frame's worth via a temp handler
+    const probe = e => {
+      const a = e.acceleration && e.acceleration.x != null
+                ? e.acceleration
+                : e.accelerationIncludingGravity;
+      if (!a) return;
+      offsetX = a.x || 0;
+      offsetZ = a.z || 0;
+      window.removeEventListener('devicemotion', probe);
+      showToast('Gゼロ点を設定しました');
+    };
+    window.addEventListener('devicemotion', probe, {once:true});
+  }
+
+  return {start, calibrate, get: () => curG};
+})();
+
+/* ============================================================
+   TIMER MODULE
+============================================================ */
+const Timer = (() => {
+  let state = 'idle';   // idle | armed | running
+  let startedAt = 0;
+  let lastLap = null;
+  let bestLap = null;
+  let activeCourse = null;
+  let tickId = null;
+
+  function setCourse(c) {
+    activeCourse = c;
+    lastLap = null;
+    bestLap = null;
+    refreshDisplay();
+    document.getElementById('sbCourse').textContent = c ? c.name.toUpperCase() : 'NO COURSE';
+  }
+
+  function getCourse() { return activeCourse; }
+
+  // refresh best from DB
+  async function loadBest() {
+    if (!activeCourse) return;
+    const laps = await DB.lapsByCourse(activeCourse.id);
+    if (laps.length) {
+      bestLap = Math.min(...laps.map(l => l.timeMs));
+      const recent = laps[laps.length - 1];
+      lastLap = recent.timeMs;
+    } else {
+      bestLap = null; lastLap = null;
+    }
+    refreshDisplay();
+  }
+
+  function arm() {
+    if (!activeCourse) { showToast('コースを選択してください'); return; }
+    if (state === 'running') return;
+    state = 'armed';
+    updateArmBtn();
+    showToast('ARMED - スタート地点で計測開始');
+  }
+
+  function disarm() {
+    state = 'idle';
+    stopTick();
+    document.getElementById('tCurrent').textContent = '00:00.00';
+    updateArmBtn();
+  }
+
+  function startRun() {
+    state = 'running';
+    startedAt = performance.now();
+    updateArmBtn();
+    startTick();
+  }
+
+  async function finishLap() {
+    const t = performance.now() - startedAt;
+    if (t < MIN_LAP_MS) return;     // guard against double-trigger
+    stopTick();
+    lastLap = t;
+    if (bestLap == null || t < bestLap) bestLap = t;
+    await DB.addLap({
+      courseId: activeCourse.id,
+      timeMs: Math.round(t),
+      date: Date.now(),
+    });
+    state = 'idle';
+    refreshDisplay();
+    updateArmBtn();
+    showToast('LAP ' + fmt(t));
+  }
+
+  function startTick() {
+    stopTick();
+    const tick = () => {
+      const t = performance.now() - startedAt;
+      document.getElementById('tCurrent').textContent = fmt(t);
+      tickId = requestAnimationFrame(tick);
+    };
+    tickId = requestAnimationFrame(tick);
+  }
+
+  function stopTick() {
+    if (tickId) cancelAnimationFrame(tickId);
+    tickId = null;
+  }
+
+  function getState() { return state; }
+
+  function refreshDisplay() {
+    document.getElementById('tBest').textContent = bestLap ? fmt(bestLap) : '--:--.--';
+    document.getElementById('tLast').textContent = lastLap ? fmt(lastLap) : '--:--.--';
+    if (state !== 'running') document.getElementById('tCurrent').textContent = '00:00.00';
+  }
+
+  function updateArmBtn() {
+    const btn = document.getElementById('armBtn');
+    const lbl = document.getElementById('armLbl');
+    btn.classList.remove('armed','running');
+    if (state === 'armed')   { btn.classList.add('armed');   lbl.textContent = 'ARMED'; }
+    else if (state === 'running') { btn.classList.add('running'); lbl.textContent = 'STOP'; }
+    else                     { lbl.textContent = 'ARM'; }
+  }
+
+  function fmt(ms) {
+    const total = Math.max(0, ms);
+    const m  = Math.floor(total / 60000);
+    const s  = Math.floor((total % 60000) / 1000);
+    const cs = Math.floor((total % 1000) / 10);
+    return String(m).padStart(2,'0') + ':' +
+           String(s).padStart(2,'0') + '.' +
+           String(cs).padStart(2,'0');
+  }
+
+  return {arm, disarm, startRun, finishLap, setCourse, getCourse, loadBest, getState, fmt};
+})();
+
+/* ============================================================
+   GPS -> Timer linkage
+============================================================ */
+function onGpsFix(fix) {
+  // update speed display
+  const kmh = fix.speed != null ? Math.max(0, fix.speed * 3.6) : 0;
+  document.getElementById('speedValue').textContent = kmh.toFixed(0);
+
+  // lap logic
+  const c = Timer.getCourse();
+  if (!c) return;
+  const s = Timer.getState();
+
+  if (s === 'armed') {
+    if (haversine(fix, c.start) <= FINISH_RADIUS_M) Timer.startRun();
+  } else if (s === 'running') {
+    if (haversine(fix, c.finish) <= FINISH_RADIUS_M) Timer.finishLap();
+  }
+}
+
+/* ============================================================
+   UI ROUTER
+============================================================ */
+const UI = (() => {
+  function go(scene) {
+    document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('scene-' + scene);
+    if (el) el.classList.add('active');
+    if (scene === 'courses') CourseUI.render();
+    if (scene === 'records') RecordUI.render();
+  }
+  return {go};
+})();
+
+/* ============================================================
+   COURSE UI
+============================================================ */
+const CourseUI = (() => {
+  const draft = {start:null, finish:null};
+
+  function grab(which) {
+    const fix = GPS.getLast();
+    if (!fix) { showToast('GPS取得待ち...'); return; }
+    draft[which] = {lat: fix.lat, lng: fix.lng};
+    const el = document.getElementById(which === 'start' ? 'cStart' : 'cFinish');
+    el.textContent = fix.lat.toFixed(5) + ' , ' + fix.lng.toFixed(5);
+    el.classList.add('captured');
+    refreshSaveBtn();
+  }
+
+  function refreshSaveBtn() {
+    const name = document.getElementById('cName').value.trim();
+    document.getElementById('cSave').disabled = !(name && draft.start && draft.finish);
+  }
+
+  async function save() {
+    const name = document.getElementById('cName').value.trim();
+    if (!name || !draft.start || !draft.finish) return;
+    await DB.addCourse({
+      name, start: draft.start, finish: draft.finish,
+      createdAt: Date.now(),
+    });
+    document.getElementById('cName').value = '';
+    draft.start = null; draft.finish = null;
+    document.getElementById('cStart').textContent = '— , —';
+    document.getElementById('cStart').classList.remove('captured');
+    document.getElementById('cFinish').textContent = '— , —';
+    document.getElementById('cFinish').classList.remove('captured');
+    refreshSaveBtn();
+    showToast('コースを保存しました');
+    render();
+  }
+
+  async function render() {
+    const list = document.getElementById('courseList');
+    const courses = await DB.listCourses();
+    if (!courses.length) {
+      list.innerHTML = '<div class="empty">コース未登録<br>GPS取得後、上のフォームから作成してください</div>';
+      return;
+    }
+    const active = Timer.getCourse();
+    list.innerHTML = courses.map(c => `
+      <div class="list-item ${active && active.id===c.id ? 'active':''}">
+        <div class="li-main">
+          <div class="li-title">${esc(c.name)}</div>
+          <div class="li-sub">${c.start.lat.toFixed(4)},${c.start.lng.toFixed(4)} → ${c.finish.lat.toFixed(4)},${c.finish.lng.toFixed(4)}</div>
         </div>
-        <div class="status-cell">
-          <div class="status-label">FINISH</div>
-          <div id="finish-countdown" class="status-value mono">--:--.--</div>
-        </div>
-        <div class="status-cell">
-          <div class="status-label">RECORD</div>
-          <div id="best-lap-time" class="status-value mono accent">--:--.---</div>
-        </div>
-        <div class="status-cell">
-          <div class="status-label">LAST</div>
-          <div id="last-lap-time" class="status-value mono">--:--.---</div>
+        <div class="li-acts">
+          <button class="li-btn" onclick="CourseUI.select(${c.id})">USE</button>
+          <button class="li-btn danger" onclick="CourseUI.del(${c.id})">DEL</button>
         </div>
       </div>
+    `).join('');
+  }
 
-      <div id="next-sector-display" class="next-sector">
-        <div class="ns-label">to NEXT SECTOR</div>
-        <div id="next-sector-value" class="ns-value">--:--.--</div>
-      </div>
+  async function select(id) {
+    const courses = await DB.listCourses();
+    const c = courses.find(x => x.id === id);
+    if (!c) return;
+    Timer.setCourse(c);
+    await Timer.loadBest();
+    showToast('コース: ' + c.name);
+    render();
+  }
 
-      <div id="best-delta-display" class="best-delta hidden">
-        <span class="bd-label">BEST Δ</span>
-        <span id="best-delta-value" class="bd-value">--</span>
-      </div>
+  async function del(id) {
+    if (!confirm('このコースを削除しますか？\n(関連するラップ記録は残ります)')) return;
+    await DB.delCourse(id);
+    if (Timer.getCourse() && Timer.getCourse().id === id) Timer.setCourse(null);
+    render();
+  }
 
-      <div class="now-sector-row">
-        <span class="ns-bar-label">NowSector</span>
-        <span id="now-sector-num" class="ns-bar-num">1</span>
-      </div>
-      <div class="big-timer">
-        <div id="current-lap-time" class="time-display">00:00.000</div>
-      </div>
+  // wire up name input
+  document.addEventListener('input', e => {
+    if (e.target && e.target.id === 'cName') refreshSaveBtn();
+  });
 
-      <div class="sensors-row">
-        <div class="sensor-cell gball-cell">
-          <canvas id="gball-canvas" width="320" height="320"></canvas>
-          <div class="g-text" id="g-text">0.00 G</div>
+  return {grab, save, render, select, del};
+})();
+
+/* ============================================================
+   RECORD UI
+============================================================ */
+const RecordUI = (() => {
+  async function render() {
+    const list = document.getElementById('recordList');
+    const [courses, laps] = await Promise.all([DB.listCourses(), DB.listLaps()]);
+    if (!laps.length) {
+      list.innerHTML = '<div class="empty">記録なし<br>ARMボタンから計測を開始してください</div>';
+      return;
+    }
+    // group by course
+    const byC = {};
+    laps.forEach(l => { (byC[l.courseId] = byC[l.courseId] || []).push(l); });
+    const html = courses.filter(c => byC[c.id]).map(c => {
+      const ls = byC[c.id].sort((a,b) => a.timeMs - b.timeMs);
+      const best = ls[0];
+      const recent = byC[c.id].sort((a,b) => b.date - a.date).slice(0, 5);
+      const rows = recent.map(l => `
+        <div class="list-item" style="background:var(--bg-2)">
+          <div class="li-main">
+            <div class="li-title" style="font-size:13px">${Timer.fmt(l.timeMs)} ${l.id===best.id ? '<span style="color:var(--good);font-size:10px;margin-left:6px">BEST</span>' : ''}</div>
+            <div class="li-sub">${new Date(l.date).toLocaleString('ja-JP')}</div>
+          </div>
+          <div class="li-acts">
+            <button class="li-btn danger" onclick="RecordUI.del(${l.id})">DEL</button>
+          </div>
         </div>
-        <div class="sensor-cell speed-cell">
-          <canvas id="speed-canvas" width="600" height="320"></canvas>
+      `).join('');
+      return `
+        <div style="margin-bottom:14px">
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--txt-3);letter-spacing:.18em;margin-bottom:8px;text-transform:uppercase">${esc(c.name)} · BEST ${Timer.fmt(best.timeMs)}</div>
+          <div class="list">${rows}</div>
         </div>
-      </div>
+      `;
+    }).join('');
+    list.innerHTML = html || '<div class="empty">記録なし</div>';
+  }
 
-      <div id="splits-grid" class="splits-grid"></div>
+  async function del(id) {
+    if (!confirm('このラップ記録を削除しますか？')) return;
+    await DB.delLap(id);
+    render();
+  }
 
-      <div class="drive-footer">
-        <button id="btn-export-csv" class="btn-ghost">CSV 出力</button>
-        <button id="btn-motion-perm" class="btn-ghost" style="display:none">センサー許可</button>
-      </div>
+  return {render, del};
+})();
 
-    </main>
-  </section>
+/* ============================================================
+   UTILITIES
+============================================================ */
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
-  <div id="toast" class="toast"></div>
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+/* ============================================================
+   BOOT SEQUENCE
+   1. show splash 1.8s
+   2. show notice (blocks UI until OK)
+   3. on OK: request motion permission, start GPS, init DB, go main
+============================================================ */
+async function boot() {
+  // splash duration
+  setTimeout(() => {
+    document.getElementById('scene-splash').classList.remove('active');
+    document.getElementById('scene-notice').classList.add('active');
+  }, 1800);
 
-  <script src="app.js"></script>
+  // initialize DB in background
+  try { await DB.init(); } catch(e) { console.error('DB init failed', e); }
+
+  // notice OK handler
+  document.getElementById('noticeOk').addEventListener('click', async () => {
+    // request motion permission (iOS) — must be triggered by user gesture
+    await Motion.start();
+
+    // start GPS
+    GPS.start(onGpsFix);
+
+    // show main
+    document.getElementById('scene-notice').classList.remove('active');
+    document.getElementById('scene-main').classList.add('active');
+
+    // load latest active course if any
+    const courses = await DB.listCourses();
+    if (courses.length) {
+      Timer.setCourse(courses[courses.length - 1]);
+      await Timer.loadBest();
+    }
+  });
+
+  // wire main action buttons
+  document.getElementById('armBtn').addEventListener('click', () => {
+    const s = Timer.getState();
+    if (s === 'idle')         Timer.arm();
+    else if (s === 'armed')   Timer.disarm();
+    else if (s === 'running') Timer.disarm();
+  });
+  document.getElementById('calibBtn').addEventListener('click', () => Motion.calibrate());
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (confirm('現在ラップをリセットしますか？')) Timer.disarm();
+  });
+}
+
+boot();
+</script>
 </body>
 </html>
