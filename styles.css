@@ -810,6 +810,55 @@ body::before {
 }
 
 /* ============================================================
+   SPLASH SCREEN
+   ============================================================ */
+.splash-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: splash-fade-in 0.5s ease-out;
+}
+
+@keyframes splash-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.splash-mark {
+  font-size: 52px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 8px;
+  text-shadow: 0 0 32px rgba(255, 176, 0, 0.5);
+}
+
+.splash-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 32px;
+  letter-spacing: 0.22em;
+  color: var(--fg);
+}
+
+.splash-maker {
+  font-family: 'Noto Sans JP', var(--font-sans);
+  font-size: 16px;
+  color: var(--fg-dim);
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+}
+
+.splash-ver {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  color: var(--fg-faint);
+}
+
+/* ============================================================
    WARNING SCREEN (startup disclaimer)
    ============================================================ */
 .warning-container {

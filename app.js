@@ -1442,9 +1442,14 @@
   // INIT
   // ============================================================
   renderHome();
-  // Warning screen is the active screen at boot (per HTML markup);
-  // explicitly enforce in case of route restoration.
-  showScreen('warning');
+  // ============================================================
+  // SPLASH → WARNING 自動遷移（2秒）
+  // ============================================================
+  renderHome();
+  showScreen('splash');
+  setTimeout(() => {
+    showScreen('warning');
+  }, 2000);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
