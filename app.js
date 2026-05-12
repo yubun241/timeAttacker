@@ -1443,13 +1443,13 @@
   // ============================================================
   renderHome();
   // ============================================================
-  // SPLASH → WARNING 自動遷移（2秒）
+  // SPLASH → WARNING 自動遷移（3秒）
   // ============================================================
   renderHome();
   showScreen('splash');
   setTimeout(() => {
     showScreen('warning');
-  }, 2000);
+  }, 3000);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
