@@ -1,4 +1,4 @@
-# MIRAGE / Time Attack
+# Time Attack
 
 GPS タイムアタック計測 PWA — GitHub Pages デプロイ前提。
 
