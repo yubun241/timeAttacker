@@ -964,6 +964,32 @@ body::before {
 .section-edit-row input.target.valid   { border-color: var(--green); color: var(--green); }
 .section-edit-row input.target.invalid { border-color: var(--red); }
 
+/* G-Ball ZERO calibration button (overlay top-right of gball cell) */
+.g-cal-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(20, 23, 29, 0.85);
+  border: 1px solid var(--border-strong);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  padding: 5px 9px;
+  border-radius: 3px;
+  cursor: pointer;
+  z-index: 5;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s, color 0.1s;
+}
+.g-cal-btn:active,
+.g-cal-btn.flash {
+  background: var(--accent);
+  color: #1a1300;
+  border-color: var(--accent);
+}
+
 /* ============================================================
    LEAFLET DARK
    ============================================================ */

@@ -711,8 +711,7 @@
       state.csvRows = [];
 
       // Calibrate G-ball at START (use smoothed values for stability)
-      state.g_calib.x = state.g_smooth.x;
-      state.g_calib.z = state.g_smooth.z;
+      calibrateGBall();
 
       const btn = document.getElementById('btn-start-stop');
       btn.textContent = 'STOP';
@@ -1337,6 +1336,24 @@
     }
     state.motionEnabled = false;
   }
+
+  /**
+   * Capture the current smoothed G reading as the zero-point.
+   * Called automatically at START, and manually via the ZERO button.
+   */
+  function calibrateGBall() {
+    state.g_calib.x = state.g_smooth.x;
+    state.g_calib.z = state.g_smooth.z;
+  }
+
+  // Manual ZERO button (always available on drive screen)
+  document.getElementById('btn-g-cal').addEventListener('click', () => {
+    calibrateGBall();
+    const btn = document.getElementById('btn-g-cal');
+    btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 250);
+    toast('G ゼロ点を補正しました');
+  });
 
   document.getElementById('btn-motion-perm').addEventListener('click', async () => {
     try {
