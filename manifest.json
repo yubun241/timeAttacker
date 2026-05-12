@@ -1,24 +1,16 @@
 {
-  "name": "Time Attacker",
-  "short_name": "TIME ATTCKER",
-  "description": "GPS-based time attack timer with section splits",
+  "name": "TIME ATTACKER",
+  "short_name": "TIME ATTACKER",
+  "description": "GPS タイムアタック計測 — マップ上で線を引いてラップ計測",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0c10",
   "theme_color": "#0a0c10",
+  "lang": "ja",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

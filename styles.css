@@ -1,5 +1,5 @@
 /* ============================================================
-   TIME ATTACK  v2
+   TIME ATTACKER  Ver.1.0  (藤井工藝)
    ============================================================ */
 
 :root {
@@ -808,6 +808,161 @@ body::before {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ============================================================
+   WARNING SCREEN (startup disclaimer)
+   ============================================================ */
+.warning-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: calc(var(--safe-top) + 24px) 20px calc(20px + var(--safe-bot));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.warning-brand {
+  text-align: center;
+  padding: 16px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.warning-brand .wb-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.warning-brand .wb-maker {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg);
+  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+}
+.warning-brand .wb-ver {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--fg-dim);
+}
+
+.warning-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+.warning-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.warning-body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--fg);
+  white-space: pre-line;
+}
+
+#btn-warning-ok {
+  margin-top: 8px;
+  letter-spacing: 0.4em;
+  font-size: 16px;
+  padding: 18px;
+}
+
+/* ============================================================
+   BRAND META (home top right)
+   ============================================================ */
+.brand-meta {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-family: var(--font-mono);
+  line-height: 1.2;
+}
+.brand-meta .bm-maker {
+  font-size: 11px;
+  color: var(--fg-dim);
+  letter-spacing: 0.05em;
+}
+.brand-meta .bm-ver {
+  font-size: 9px;
+  color: var(--fg-faint);
+  letter-spacing: 0.18em;
+}
+
+/* ============================================================
+   MODAL FOOTER (cancel / save)
+   ============================================================ */
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px calc(12px + var(--safe-bot));
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
+}
+.modal-footer .btn-primary {
+  flex: 1.5;
+}
+.btn-cancel {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--border-strong);
+  padding: 14px 18px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  text-transform: uppercase;
+  flex: 1;
+}
+.btn-cancel:active {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+}
+
+/* Target time input hint (numeric MMSS.CC) */
+.target-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  line-height: 1.7;
+}
+.target-hint code {
+  background: var(--bg-elev-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.target-hint strong { color: var(--fg); }
+
+/* Target input validation states */
+.section-edit-row input.target.valid   { border-color: var(--green); color: var(--green); }
+.section-edit-row input.target.invalid { border-color: var(--red); }
 
 /* ============================================================
    LEAFLET DARK

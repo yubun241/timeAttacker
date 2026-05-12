@@ -1,5 +1,5 @@
 /* ============================================================
-   MIRAGE / TIME ATTACK — v2
+   TIME ATTACKER  (Ver.1.0 / 藤井工藝)
    GPS time-attack PWA with map-based line drawing
    ============================================================ */
 
@@ -96,20 +96,50 @@
     return `${sign}${(Math.abs(ms) / 1000).toFixed(3)}`;
   }
 
-  /** Parse "M:SS" or "MM:SS" or "S" → ms. Empty → null. */
-  function parseTargetTime(s) {
-    if (!s || !s.trim()) return null;
-    const t = s.trim();
-    if (t.includes(':')) {
-      const [mm, ss] = t.split(':');
-      const m = parseInt(mm, 10);
-      const sec = parseFloat(ss);
-      if (isNaN(m) || isNaN(sec)) return null;
-      return Math.round((m * 60 + sec) * 1000);
+  /**
+   * Parse MMSS.CC numeric input → ms
+   * Accepts:
+   *   "0520.10" → 05:20.10  (MMSS.CC with dot)
+   *   "052010"  → 05:20.10  (6-digit MMSSCC)
+   *   "0520"    → 05:20.00  (4-digit MMSS)
+   */
+  function parseTargetTime(raw) {
+    if (!raw || !raw.trim()) return null;
+    const s = raw.trim();
+    let mm, ss, cc;
+    if (s.includes('.')) {
+      const dot = s.indexOf('.');
+      const ip  = s.slice(0, dot).replace(/\D/g, '').padStart(4, '0').slice(-4);
+      const fp  = s.slice(dot + 1).replace(/\D/g, '').padEnd(2, '0').slice(0, 2);
+      mm = parseInt(ip.slice(0, 2), 10);
+      ss = parseInt(ip.slice(2, 4), 10);
+      cc = parseInt(fp, 10);
+    } else {
+      const d = s.replace(/\D/g, '');
+      if (d.length >= 6) {
+        const e = d.padStart(6, '0').slice(-6);
+        mm = parseInt(e.slice(0, 2), 10);
+        ss = parseInt(e.slice(2, 4), 10);
+        cc = parseInt(e.slice(4, 6), 10);
+      } else {
+        const e = d.padStart(4, '0').slice(-4);
+        mm = parseInt(e.slice(0, 2), 10);
+        ss = parseInt(e.slice(2, 4), 10);
+        cc = 0;
+      }
     }
-    const sec = parseFloat(t);
-    if (isNaN(sec)) return null;
-    return Math.round(sec * 1000);
+    if (isNaN(mm) || isNaN(ss) || isNaN(cc)) return null;
+    if (ss >= 60 || cc >= 100) return null;
+    return mm * 60000 + ss * 1000 + cc * 10;
+  }
+
+  /** Format ms → "MM:SS.CC" for display */
+  function formatNumericDisplay(ms) {
+    if (ms == null || !isFinite(ms)) return '';
+    const mm = Math.floor(ms / 60000);
+    const ss = Math.floor((ms % 60000) / 1000);
+    const cc = Math.floor((ms % 1000) / 10);
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
   }
 
   function uid() {
@@ -192,6 +222,7 @@
     motionEnabled: false,
     g_calib: { x: 0, z: 0 },
     g_raw: { x: 0, y: 0, z: 0 },
+    g_smooth: { x: 0, z: 0 },   // EMA-filtered values for stable display
     g_lat: 0, g_lon: 0,
 
     // CSV record buffer
@@ -495,12 +526,15 @@
 
   // ============================================================
   // DETAIL MODAL
+  // Cancel button: just close (no save)
+  // Save button:   write settings, then close
   // ============================================================
   document.querySelector('[data-action="edit-settings"]').addEventListener('click', openDetailModal);
-  document.querySelector('[data-action="close-detail"]').addEventListener('click', closeDetailModal);
+  document.querySelector('[data-action="close-detail"]').addEventListener('click', closeDetailModalNoSave);
   document.getElementById('modal-detail').addEventListener('click', e => {
-    if (e.target.id === 'modal-detail') closeDetailModal();
+    if (e.target.id === 'modal-detail') closeDetailModalNoSave();
   });
+  document.getElementById('btn-save-detail').addEventListener('click', saveDetailAndClose);
 
   function openDetailModal() {
     const c = getActiveCourse();
@@ -513,17 +547,24 @@
     document.getElementById('modal-detail').classList.add('show');
   }
 
-  function closeDetailModal() {
+  /** Cancel: close modal without saving. */
+  function closeDetailModalNoSave() {
+    document.getElementById('modal-detail').classList.remove('show');
+  }
+
+  /** Save: persist all field values then close. */
+  function saveDetailAndClose() {
     const c = getActiveCourse();
     if (c) {
       const dur = parseInt(document.getElementById('cfg-duration').value, 10);
-      c.duration = isNaN(dur) ? 0 : dur * 60;
-      const cd = parseFloat(document.getElementById('cfg-cooldown').value);
-      c.cooldownS = isNaN(cd) ? DEFAULT_COOLDOWN_S : Math.max(0, cd);
+      c.duration  = isNaN(dur) ? 0 : dur * 60;
+      const cd  = parseFloat(document.getElementById('cfg-cooldown').value);
+      c.cooldownS = isNaN(cd)  ? DEFAULT_COOLDOWN_S : Math.max(0, cd);
       const acc = parseInt(document.getElementById('cfg-acc').value, 10);
       c.accLimitM = isNaN(acc) ? DEFAULT_ACC_M : Math.max(0, acc);
       c.dirFilter = document.getElementById('cfg-dirfilter').checked;
       saveCourses();
+      toast('保存しました');
     }
     document.getElementById('modal-detail').classList.remove('show');
   }
@@ -539,25 +580,45 @@
     c.sections.forEach((s, idx) => {
       const row = document.createElement('div');
       row.className = 'section-edit-row';
-      const targetText = s.targetMs != null ? formatTimeShort(s.targetMs).replace(/^00:/, '') : '';
+      const targetText = s.targetMs != null ? formatNumericDisplay(s.targetMs) : '';
       row.innerHTML = `
         <span class="name">${escapeHtml(s.name || `S${idx + 1}`)}</span>
-        <input class="target" type="text" inputmode="decimal" placeholder="M:SS" value="${targetText}" />
+        <input class="target" type="text" inputmode="numeric" placeholder="MMSS.CC" value="${targetText}" />
         <button class="del">削除</button>
       `;
       const inp = row.querySelector('input.target');
-      inp.addEventListener('change', () => {
-        s.targetMs = parseTargetTime(inp.value);
-        saveCourses();
+      inp.addEventListener('input', () => {
+        if (!inp.value.trim()) { inp.classList.remove('valid', 'invalid'); return; }
+        const ms = parseTargetTime(inp.value);
+        inp.classList.toggle('valid',   ms != null);
+        inp.classList.toggle('invalid', ms == null);
+      });
+      inp.addEventListener('blur', () => {
+        if (!inp.value.trim()) {
+          s.targetMs = null;
+          inp.classList.remove('valid', 'invalid');
+          return;
+        }
+        const ms = parseTargetTime(inp.value);
+        if (ms != null) {
+          s.targetMs = ms;
+          inp.value = formatNumericDisplay(ms);
+          inp.classList.add('valid');
+          inp.classList.remove('invalid');
+        } else {
+          inp.classList.add('invalid');
+        }
       });
       row.querySelector('.del').addEventListener('click', () => {
-        if (!confirm(`「${s.name}」を削除しますか？`)) return;
+        const name = s.name || `S${idx + 1}`;
+        if (!confirm(`「${name}」を削除しますか？`)) return;
         c.sections.splice(idx, 1);
         c.sections.forEach((sec, i) => { if (!sec.name || /^S\d+$/.test(sec.name)) sec.name = `S${i + 1}`; });
         c.bestLap = null;
         saveCourses();
         renderSectionsEdit();
         redrawEditLines();
+        toast(`「${name}」を削除`);
       });
       list.appendChild(row);
     });
@@ -649,9 +710,9 @@
       state.currentLapSplits = [];
       state.csvRows = [];
 
-      // Calibrate G-ball at START
-      state.g_calib.x = state.g_raw.x;
-      state.g_calib.z = state.g_raw.z;
+      // Calibrate G-ball at START (use smoothed values for stability)
+      state.g_calib.x = state.g_smooth.x;
+      state.g_calib.z = state.g_smooth.z;
 
       const btn = document.getElementById('btn-start-stop');
       btn.textContent = 'STOP';
@@ -1027,19 +1088,21 @@
         }
       }
 
-      // G-ball update from latest motion sample
-      if (state.gball) {
-        const lat = state.g_raw.x - state.g_calib.x;
-        const lon = state.g_raw.z - state.g_calib.z;
-        state.g_lat = lat;
-        state.g_lon = lon;
-        state.gball.draw(lat, lon);
-        const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
-        document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
+      // G-ball update from smoothed motion (calibrated to START position)
+      try {
+        if (state.gball) {
+          const lat = state.g_smooth.x - state.g_calib.x;
+          const lon = state.g_smooth.z - state.g_calib.z;
+          state.g_lat = lat;
+          state.g_lon = lon;
+          state.gball.draw(lat, lon);
+          const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
+          document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
+        }
+        if (state.speedGraph) state.speedGraph.draw();
+      } catch (_) {
+        // Skip bad render frame; do not stop RAF loop
       }
-
-      // Speed graph render
-      if (state.speedGraph) state.speedGraph.draw();
 
       state.rafId = requestAnimationFrame(tick);
     }
@@ -1225,7 +1288,26 @@
 
   // ============================================================
   // DEVICEMOTION
+  // ----------------------------------------------------------------
+  // Phone orientation assumption (per ユウぶん様 仕様):
+  //   - Portrait, vertical, screen parallel to driver's face
+  //   - Camera (top of phone) points up toward the sky
+  //   - Screen faces driver (front camera toward driver)
+  //
+  // Device axes (W3C DeviceMotion convention):
+  //   +X: phone right  → car right  (lateral)
+  //   +Y: phone up     → world up   (gravity axis, mostly +9.81 m/s²)
+  //   +Z: out of screen → toward driver → toward REAR of car (longitudinal)
+  //
+  // Display mapping (motion-direction convention):
+  //   lat_g = +X / g    → ball moves right (R) on lateral right accel
+  //   lon_g = −Z / g    → ball moves up (F) on forward accel
+  //                       (Z is negated because car forward = phone −Z)
+  //
+  // EMA smoothing applied to suppress accelerometer noise.
+  // α = 0.15 → ~7-sample (≈70 ms at 100 Hz) effective time constant.
   // ============================================================
+  const G_SMOOTH_ALPHA = 0.15;
   let motionHandler = null;
 
   function attachMotionListener() {
@@ -1233,11 +1315,16 @@
     motionHandler = (e) => {
       const ag = e.accelerationIncludingGravity;
       if (!ag) return;
-      // Convert m/s² to G; mirror Python: lat=x, lon=-z
-      const x = (ag.x || 0) / 9.81;
-      const y = (ag.y || 0) / 9.81;
-      const z = -(ag.z || 0) / 9.81;
-      state.g_raw.x = x; state.g_raw.y = y; state.g_raw.z = z;
+      const x = (ag.x || 0) / 9.81;        // lateral raw (G)
+      const y = (ag.y || 0) / 9.81;        // vertical raw (mostly gravity)
+      const z = -(ag.z || 0) / 9.81;       // longitudinal raw (Z negated)
+      state.g_raw.x = x;
+      state.g_raw.y = y;
+      state.g_raw.z = z;
+      // EMA low-pass filter
+      const a = G_SMOOTH_ALPHA;
+      state.g_smooth.x = a * x + (1 - a) * state.g_smooth.x;
+      state.g_smooth.z = a * z + (1 - a) * state.g_smooth.z;
     };
     window.addEventListener('devicemotion', motionHandler);
     state.motionEnabled = true;
@@ -1326,10 +1413,21 @@
   }
 
   // ============================================================
+  // WARNING SCREEN (startup disclaimer)
+  // Shown on every app launch. OK transitions to home.
+  // ============================================================
+  document.getElementById('btn-warning-ok').addEventListener('click', () => {
+    showScreen('home');
+    renderHome();
+  });
+
+  // ============================================================
   // INIT
   // ============================================================
   renderHome();
-  showScreen('home');
+  // Warning screen is the active screen at boot (per HTML markup);
+  // explicitly enforce in case of route restoration.
+  showScreen('warning');
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

@@ -6,12 +6,9 @@
   <meta name="theme-color" content="#0a0c10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>TimeAttacker</title>
+  <title>TIME ATTACKER</title>
 
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 
   <link
     rel="stylesheet"
@@ -31,12 +28,54 @@
 </head>
 <body>
 
+  <!-- ====== WARNING SCREEN (first screen on every startup) ====== -->
+  <section id="screen-warning" class="screen active">
+    <div class="warning-container">
+      <div class="warning-brand">
+        <div class="wb-name">TIME ATTACKER</div>
+        <div class="wb-maker">藤井工藝</div>
+        <div class="wb-ver">Ver.1.0</div>
+      </div>
+
+      <div class="warning-card">
+        <div class="warning-title">【注意事項】</div>
+        <div class="warning-body">
+運転中に操作しないでください。
+STARTボタンを押せば、設定地点を通過すると自動で計測が開始されます。
+あらかじめ設定してから運転してください。
+画面を覗き込んで運転するのはやめてください。
+よそ見運転は大変危険です。
+GPSによる測定を行っているため、
+環境によって誤差が発生する場合があります。</div>
+      </div>
+
+      <div class="warning-card">
+        <div class="warning-title">【WARNING】</div>
+        <div class="warning-body">
+Do not operate this application while driving.
+After pressing the START button,
+measurement will automatically begin when passing the configured point.
+Please complete all settings before driving.
+Do not stare at the screen while driving.
+Distracted driving is extremely dangerous.
+This application uses GPS measurement,
+so inaccuracies may occur depending on the environment.</div>
+      </div>
+
+      <button id="btn-warning-ok" class="btn-primary big">OK</button>
+    </div>
+  </section>
+
   <!-- ====== HOME SCREEN ====== -->
-  <section id="screen-home" class="screen active">
+  <section id="screen-home" class="screen">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark">◢</span>
         <span class="brand-name">TIME ATTACKER</span>
+      </div>
+      <div class="brand-meta">
+        <span class="bm-maker">藤井工藝</span>
+        <span class="bm-ver">Ver.1.0</span>
       </div>
     </header>
 
@@ -101,7 +140,6 @@
 
         <div class="form-row">
           <label>走行時間（分）</label>
-
           <input id="cfg-duration" type="number" inputmode="numeric" min="0" step="1" placeholder="0 = 無制限" />
         </div>
 
@@ -138,7 +176,7 @@
 
       </div>
       <footer class="modal-footer">
-        <button class="icon-btn wide" data-action="close-detail">✕ キャンセル</button>
+        <button class="btn-cancel" data-action="close-detail">キャンセル</button>
         <button id="btn-save-detail" class="btn-primary">保存</button>
       </footer>
     </div>

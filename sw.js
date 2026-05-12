@@ -1,7 +1,7 @@
-// MIRAGE / Time Attack — minimal service worker
+// TIME ATTACKER — minimal service worker
 // Caches app shell for offline use. Map tiles fall back to network.
 
-const CACHE = 'timeAttker-v1';
+const CACHE = 'timeattacker-v1-0';
 const APP_SHELL = [
   './',
   './index.html',
@@ -30,7 +30,6 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Network-first for tiles; cache-first for app shell
   if (url.host.includes('tile.openstreetmap.org')) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
