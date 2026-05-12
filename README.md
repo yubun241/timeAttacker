@@ -1,4 +1,4 @@
-# Time Attack
+# Time Attacker
 
 GPS タイムアタック計測 PWA — GitHub Pages デプロイ前提。
 
