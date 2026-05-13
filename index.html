@@ -281,6 +281,34 @@ so inaccuracies may occur depending on the environment.</div>
         </div>
       </div>
 
+      <!-- 分析マップ -->
+      <div class="analysis-map-wrap">
+        <div id="session-map" class="analysis-map"></div>
+        <div id="session-map-empty" class="analysis-map-empty hidden">GPS データなし</div>
+      </div>
+
+      <!-- メトリック選択 -->
+      <div class="analysis-controls">
+        <div class="control-row">
+          <div class="control-label">指標</div>
+          <div id="metric-chips" class="chip-row"></div>
+        </div>
+
+        <!-- ラップ選択（複数選択可） -->
+        <div class="control-row">
+          <div class="control-label">ラップ</div>
+          <div id="lap-chips" class="chip-row"></div>
+        </div>
+
+        <!-- カラースケール凡例 -->
+        <div class="legend-row" id="legend-row">
+          <span class="legend-label">凡例</span>
+          <div class="legend-gradient" id="legend-gradient"></div>
+          <span id="legend-min" class="legend-tick">--</span>
+          <span id="legend-max" class="legend-tick">--</span>
+        </div>
+      </div>
+
       <!-- ラップ一覧 -->
       <div class="section-title"><span class="dot"></span><span>ラップタイム</span></div>
       <div id="session-lap-list" class="session-lap-list"></div>
