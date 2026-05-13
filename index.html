@@ -131,7 +131,6 @@ so inaccuracies may occur depending on the environment.</div>
         <div class="setting-row">
           <div class="setting-label">
             <div class="setting-name">接続モード</div>
-            <div class="setting-desc">UniCarScan + BMW は Double 推奨</div>
           </div>
           <div class="seg-toggle" data-key="obdMode">
             <button class="seg-btn"        data-value="single">Single</button>
@@ -162,7 +161,7 @@ so inaccuracies may occur depending on the environment.</div>
           <input type="checkbox" id="cb-pid-rpm" checked>
           <span class="check-text">
             <span class="check-name">回転数</span>
-            <span class="check-desc">PID 010C — 1回転 / cycle で優先取得</span>
+            <span class="check-desc">rpm</span>
           </span>
         </label>
 
@@ -170,7 +169,7 @@ so inaccuracies may occur depending on the environment.</div>
           <input type="checkbox" id="cb-pid-coolant" checked>
           <span class="check-text">
             <span class="check-name">水温</span>
-            <span class="check-desc">PID 0105</span>
+            <span class="check-desc">°C</span>
           </span>
         </label>
 
@@ -178,15 +177,15 @@ so inaccuracies may occur depending on the environment.</div>
           <input type="checkbox" id="cb-pid-oiltemp" checked>
           <span class="check-text">
             <span class="check-name">油温</span>
-            <span class="check-desc">PID 015C</span>
+            <span class="check-desc">°C</span>
           </span>
         </label>
 
         <label class="check-row">
           <input type="checkbox" id="cb-pid-intake" checked>
           <span class="check-text">
-            <span class="check-name">吸気温</span>
-            <span class="check-desc">PID 010F</span>
+            <span class="check-name">吸気温度</span>
+            <span class="check-desc">°C</span>
           </span>
         </label>
 
@@ -194,7 +193,7 @@ so inaccuracies may occur depending on the environment.</div>
           <input type="checkbox" id="cb-pid-throttle" checked>
           <span class="check-text">
             <span class="check-name">スロットル開度</span>
-            <span class="check-desc">PID 0111</span>
+            <span class="check-desc">%</span>
           </span>
         </label>
       </div>
@@ -331,7 +330,6 @@ so inaccuracies may occur depending on the environment.</div>
       <div class="obd-indicator" id="obd-indicator" title="OBD2 接続状態">
         <span class="obd-dot"></span>
         <span class="obd-label">OBD</span>
-        <span class="obd-rpm" id="obd-rpm-indicator"></span>
       </div>
     </header>
 

@@ -552,7 +552,6 @@
       state.obd.intake = null;
       state.obd.throttle = null;
       bleSetStatus('disconnected');
-      updateObdLiveDisplay();
       toast('OBD2 切断');
     });
   }
@@ -732,7 +731,6 @@
   };
   let _pollTimer    = null;
   let _timeoutTimer = null;
-  let _obdUiThrottle = 0;
 
   function recomputeActivePids() {
     const pids = state.settings.pids;
@@ -831,13 +829,6 @@
         for (const l of lines) parseObdLine(pid, l);
       }
     }
-
-    // 値が動いたらインジケータを更新（100ms throttle）
-    const now = Date.now();
-    if (now - _obdUiThrottle > 100) {
-      _obdUiThrottle = now;
-      updateObdLiveDisplay();
-    }
   }
 
   // PID 別パース
@@ -871,15 +862,6 @@
       console.warn('[OBD PARSE]', e);
     }
     return false;
-  }
-
-  // Drive 画面の OBD インジケータに RPM を表示
-  function updateObdLiveDisplay() {
-    const el = document.getElementById('obd-rpm-indicator');
-    if (!el) return;
-    el.textContent = (state.obd.rpm !== null && state.obd.rpm !== undefined)
-      ? String(state.obd.rpm)
-      : '';
   }
 
   // ============================================================

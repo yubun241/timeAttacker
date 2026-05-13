@@ -1,7 +1,7 @@
 // TIME ATTACKER — minimal service worker
 // Caches app shell for offline use. Map tiles fall back to network.
 
-const CACHE = 'timeattacker-v1-7';
+const CACHE = 'timeattacker-v1-8';
 const APP_SHELL = [
   './',
   './index.html',
