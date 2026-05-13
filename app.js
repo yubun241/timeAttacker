@@ -11,6 +11,8 @@
   // ============================================================
   const STORAGE_KEY = 'mirage.courses.v2';
   const SETTINGS_KEY = 'timeattacker.settings.v1';
+  const SESSIONS_KEY = 'timeattacker.sessions.v1';
+  const MAX_SESSIONS = 30;
   const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const DEFAULT_CENTER = [35.6812, 139.7671];
   const R_EARTH = 6378137;
@@ -224,6 +226,96 @@
   }
 
   // ============================================================
+  // SESSIONS / HISTORY (走行履歴の永続化)
+  // ============================================================
+  function loadSessions() {
+    try {
+      const raw = localStorage.getItem(SESSIONS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) { return []; }
+  }
+
+  function saveSessions(list) {
+    try {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      console.error('Sessions save failed', e);
+      // 容量オーバーの場合は古いセッションを削除して再試行
+      if (e.name === 'QuotaExceededError' && list.length > 5) {
+        list.splice(0, Math.max(1, Math.floor(list.length / 4)));
+        try {
+          localStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+          toast('容量上限のため古い履歴を削除しました');
+          return true;
+        } catch (_) {}
+      }
+      toast('履歴保存失敗（容量オーバー）');
+      return false;
+    }
+  }
+
+  // 走行終了時に呼ばれる: 現状のセッションデータを履歴に保存
+  function persistCurrentSession(course) {
+    // データが何もないなら保存しない
+    if (!state.csvRows || state.csvRows.length === 0) return;
+    if (!state.sessionStartTime) return;
+
+    const laps = (state.completedLaps || []).map(l => ({
+      number:  l.number,
+      totalMs: l.totalMs,
+      splits:  l.splits || [],
+      date:    l.date,
+    }));
+
+    // 最速ラップの index を計算
+    let bestLapIdx = -1;
+    if (laps.length > 0) {
+      let bestMs = Infinity;
+      laps.forEach((l, i) => { if (l.totalMs < bestMs) { bestMs = l.totalMs; bestLapIdx = i; } });
+    }
+
+    // OBD データが入っているか確認（最後の5カラムのいずれかに値があるか）
+    const hasObdData = state.csvRows.some(r =>
+      (r[9] !== '' && r[9] != null) ||
+      (r[10] !== '' && r[10] != null) ||
+      (r[11] !== '' && r[11] != null) ||
+      (r[12] !== '' && r[12] != null) ||
+      (r[13] !== '' && r[13] != null));
+
+    const session = {
+      id: 'sess_' + uid(),
+      courseId:   course?.id || null,
+      courseName: course?.name || '不明',
+      courseType: course?.type || 'circuit',
+      startTime:  state.sessionStartTime,
+      endTime:    Date.now(),
+      laps,
+      bestLapIdx,
+      hasObdData,
+      // CSV と同じ順序のカラム定義
+      columns: [
+        'iso_time','lat','lon','acc','speed_kmh','lap','sector','g_lat','g_lon',
+        'rpm','coolant','oilTemp','intake','throttle'
+      ],
+      rows: state.csvRows.slice(),  // shallow copy
+    };
+
+    const sessions = loadSessions();
+    sessions.push(session);
+    // 古いセッションを削除して上限を維持
+    while (sessions.length > MAX_SESSIONS) sessions.shift();
+    saveSessions(sessions);
+  }
+
+  function deleteSession(id) {
+    const sessions = loadSessions().filter(s => s.id !== id);
+    saveSessions(sessions);
+  }
+
+  // ============================================================
   // STATE
   // ============================================================
   const state = {
@@ -249,6 +341,8 @@
     lapNumber: 0,
     lastLapMs: null,
     currentLapSplits: [],              // [{ idx, t, splitMs }]
+    completedLaps: [],                 // セッション中に完走した全ラップの配列
+    sessionStartTime: null,            // セッション開始 ms
     sectionStartT: null,               // start of current section (for live target Δ)
     currentSectorIdx: 0,
     gateCooldown: {},                  // gateKey → last trigger time
@@ -725,6 +819,164 @@
   document.getElementById('btn-ble-scan').addEventListener('click', bleStartScan);
   document.getElementById('btn-ble-reconnect').addEventListener('click', bleQuickReconnect);
   document.getElementById('btn-ble-disconnect').addEventListener('click', bleDisconnect);
+
+  // ============================================================
+  // HISTORY (走行履歴一覧 + セッション詳細)
+  // ============================================================
+  let _currentSessionId = null;
+
+  function openHistory() {
+    showScreen('history');
+    renderHistoryList();
+  }
+
+  function renderHistoryList() {
+    const sessions = loadSessions().slice().sort((a, b) => b.startTime - a.startTime);
+    const listEl = document.getElementById('history-list');
+    const emptyEl = document.getElementById('history-empty');
+
+    listEl.innerHTML = '';
+
+    if (sessions.length === 0) {
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+    emptyEl.classList.add('hidden');
+
+    sessions.forEach(s => {
+      const bestMs = (s.bestLapIdx >= 0 && s.laps[s.bestLapIdx])
+        ? s.laps[s.bestLapIdx].totalMs : null;
+      const dateStr = formatSessionDate(s.startTime);
+
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.dataset.sessionId = s.id;
+      item.innerHTML = `
+        <div class="history-item-top">
+          <div class="history-item-name">${escapeHtml(s.courseName)}</div>
+          <div class="history-item-date">${dateStr}</div>
+        </div>
+        <div class="history-item-stats">
+          <span><span class="label">LAPS</span>${s.laps.length}</span>
+          <span><span class="label">BEST</span><span class="best">${bestMs ? formatTime(bestMs) : '--'}</span></span>
+          ${s.hasObdData ? '<span class="obd-flag">● OBD</span>' : ''}
+        </div>`;
+      item.addEventListener('click', () => openSessionDetail(s.id));
+      listEl.appendChild(item);
+    });
+  }
+
+  function formatSessionDate(ms) {
+    const d = new Date(ms);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function openSessionDetail(sessionId) {
+    const sessions = loadSessions();
+    const s = sessions.find(x => x.id === sessionId);
+    if (!s) {
+      toast('セッションが見つかりません');
+      return;
+    }
+    _currentSessionId = sessionId;
+
+    document.getElementById('session-course-name').textContent = s.courseName || '--';
+    document.getElementById('session-date').textContent = formatSessionDate(s.startTime);
+    document.getElementById('session-lap-count').textContent = String(s.laps.length);
+
+    const bestMs = (s.bestLapIdx >= 0 && s.laps[s.bestLapIdx])
+      ? s.laps[s.bestLapIdx].totalMs : null;
+    document.getElementById('session-best').textContent =
+      bestMs ? formatTime(bestMs) : '--:--.---';
+
+    const durSec = Math.round((s.endTime - s.startTime) / 1000);
+    const hh = Math.floor(durSec / 3600);
+    const mm = Math.floor((durSec % 3600) / 60);
+    const ss = durSec % 60;
+    document.getElementById('session-duration').textContent =
+      hh > 0 ? `${hh}h${mm}m` : `${mm}m${String(ss).padStart(2, '0')}s`;
+
+    const obdFlag = document.getElementById('session-obd-flag');
+    obdFlag.querySelector('.summary-value').textContent = s.hasObdData ? '有' : '無';
+    obdFlag.querySelector('.summary-value').style.color = s.hasObdData ? '#3fb950' : 'var(--fg-dim)';
+
+    // ラップ一覧
+    renderSessionLapList(s);
+
+    showScreen('session');
+  }
+
+  function renderSessionLapList(s) {
+    const listEl = document.getElementById('session-lap-list');
+    listEl.innerHTML = '';
+
+    if (s.laps.length === 0) {
+      listEl.innerHTML = '<div class="splits-empty" style="padding:18px;text-align:center;color:var(--fg-faint)">完走ラップなし</div>';
+      return;
+    }
+
+    s.laps.forEach((lap, i) => {
+      const isBest = (i === s.bestLapIdx);
+      const splitsTxt = (lap.splits && lap.splits.length > 0)
+        ? lap.splits.map(sp => formatTime(sp.splitMs)).join(' · ')
+        : '';
+
+      const row = document.createElement('div');
+      row.className = 'lap-row' + (isBest ? ' best' : '');
+      row.innerHTML = `
+        <div class="lap-row-num">L${lap.number}${isBest ? '<span class="badge">BEST</span>' : ''}</div>
+        <div class="lap-row-time">${formatTime(lap.totalMs)}</div>
+        <div class="lap-row-splits">${splitsTxt}</div>
+      `;
+      listEl.appendChild(row);
+    });
+  }
+
+  // History/Session: ナビゲーション
+  document.getElementById('btn-open-history').addEventListener('click', openHistory);
+  document.getElementById('btn-history-back').addEventListener('click', () => showScreen('home'));
+  document.getElementById('btn-session-back').addEventListener('click', () => showScreen('history'));
+
+  // CSV エクスポート
+  document.getElementById('btn-session-export').addEventListener('click', () => {
+    if (!_currentSessionId) return;
+    const s = loadSessions().find(x => x.id === _currentSessionId);
+    if (!s) { toast('セッションが見つかりません'); return; }
+    const header = [
+      'ISO_TIME', 'LAT', 'LON', 'ACC_M', 'SPEED_KMH',
+      'LAP', 'SECTOR', 'G_LAT', 'G_LON',
+      'RPM', 'COOLANT_C', 'OIL_TEMP_C', 'INTAKE_C', 'THROTTLE_PCT',
+    ];
+    const lines = [header.join(',')].concat(s.rows.map(r => r.join(',')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const stamp = new Date(s.startTime).toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `timeattacker_${(s.courseName || 'session').replace(/\s+/g, '_')}_${stamp}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`CSV出力: ${s.rows.length}行`);
+  });
+
+  // セッション削除
+  document.getElementById('btn-session-delete').addEventListener('click', () => {
+    if (!_currentSessionId) return;
+    if (!confirm('この履歴を削除しますか？')) return;
+    deleteSession(_currentSessionId);
+    _currentSessionId = null;
+    toast('履歴を削除しました');
+    showScreen('history');
+    renderHistoryList();
+  });
 
   // ============================================================
   // OBD2 PID ポーリング & パース (Phase 2)
@@ -1400,6 +1652,8 @@
       state.currentSectorIdx = 0;
       state.currentLapSplits = [];
       state.csvRows = [];
+      state.completedLaps = [];
+      state.sessionStartTime = Date.now();
 
       // Calibrate G-ball at START (use smoothed values for stability)
       calibrateGBall();
@@ -1442,6 +1696,10 @@
     const btn = document.getElementById('btn-start-stop');
     btn.textContent = 'START';
     btn.className = 'big-action start';
+
+    // セッションを履歴に永続化
+    const c = getActiveCourse();
+    persistCurrentSession(c);
   }
 
   // === GPS ===
@@ -1668,6 +1926,14 @@
       splits: state.currentLapSplits.map(s => ({ idx: s.idx, splitMs: s.splitMs })),
       date: Date.now()
     };
+
+    // セッション中のラップ履歴へ追加
+    state.completedLaps.push({
+      number:  state.lapNumber,
+      totalMs: lapMs,
+      splits:  lapRecord.splits,
+      date:    lapRecord.date,
+    });
 
     const isBest = !c.bestLap || lapMs < c.bestLap.totalMs;
     if (isBest) {

@@ -87,6 +87,7 @@ so inaccuracies may occur depending on the environment.</div>
         <span class="bm-maker">藤井工藝</span>
         <span class="bm-ver">Ver.1.0</span>
       </div>
+      <button id="btn-open-history" class="icon-btn history-btn" title="履歴">↺</button>
       <button id="btn-open-settings" class="icon-btn settings-btn" title="設定">⚙</button>
     </header>
 
@@ -228,6 +229,67 @@ so inaccuracies may occur depending on the environment.</div>
         <button id="btn-settings-save" class="btn-primary big">保存</button>
       </div>
 
+    </main>
+  </section>
+
+  <!-- ====== HISTORY SCREEN (走行履歴一覧) ====== -->
+  <section id="screen-history" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-action="back-home" id="btn-history-back">‹</button>
+      <div class="brand">
+        <span class="brand-name">HISTORY</span>
+      </div>
+      <div class="brand-meta"><span class="bm-ver">走行履歴</span></div>
+    </header>
+
+    <main class="history-main">
+      <div id="history-list" class="history-list"></div>
+      <div id="history-empty" class="history-empty hidden">
+        まだ走行履歴がありません。<br>計測を行うと自動でここに保存されます。
+      </div>
+    </main>
+  </section>
+
+  <!-- ====== SESSION DETAIL SCREEN (個別セッション) ====== -->
+  <section id="screen-session" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" id="btn-session-back">‹</button>
+      <div class="brand">
+        <span class="brand-name" id="session-course-name">--</span>
+      </div>
+      <div class="brand-meta"><span class="bm-ver" id="session-date">--</span></div>
+    </header>
+
+    <main class="session-main">
+      <!-- サマリ -->
+      <div class="session-summary">
+        <div class="summary-item">
+          <div class="summary-label">LAPS</div>
+          <div class="summary-value" id="session-lap-count">0</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">BEST</div>
+          <div class="summary-value accent" id="session-best">--:--.---</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">DURATION</div>
+          <div class="summary-value" id="session-duration">--</div>
+        </div>
+        <div class="summary-item" id="session-obd-flag">
+          <div class="summary-label">OBD</div>
+          <div class="summary-value">--</div>
+        </div>
+      </div>
+
+      <!-- ラップ一覧 -->
+      <div class="section-title"><span class="dot"></span><span>ラップタイム</span></div>
+      <div id="session-lap-list" class="session-lap-list"></div>
+
+      <!-- 操作ボタン -->
+      <div class="session-actions">
+        <button id="btn-session-export" class="btn-ghost">CSV エクスポート</button>
+        <button id="btn-session-delete" class="btn-ghost danger">この履歴を削除</button>
+      </div>
     </main>
   </section>
 
