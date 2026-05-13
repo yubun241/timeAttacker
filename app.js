@@ -444,6 +444,10 @@
   document.getElementById('btn-settings-save').addEventListener('click', () => {
     state.settings = collectSettings();
     saveSettings(state.settings);
+    // 接続中なら PID リストを即時反映
+    if (state.obd.connected && typeof recomputeActivePids === 'function') {
+      recomputeActivePids();
+    }
     toast('設定を保存しました');
     showScreen('home');
   });
@@ -538,6 +542,7 @@
     device._taDisconnectHandlerAdded = true;
     device.addEventListener('gattserverdisconnected', () => {
       console.log('[BLE] gattserverdisconnected');
+      bleStopPolling();
       state.obd.txChar = null;
       state.obd.rxChar = null;
       // OBD 値もクリア
@@ -547,6 +552,7 @@
       state.obd.intake = null;
       state.obd.throttle = null;
       bleSetStatus('disconnected');
+      updateObdLiveDisplay();
       toast('OBD2 切断');
     });
   }
@@ -669,8 +675,13 @@
       state.obd.deviceName = device.name || 'Unknown';
       state.obd.deviceId   = device.id;
 
-      // 通知を有効化（Phase 2 でこのイベントリスナを使ってPID応答をパースする）
+      // 通知受信 → PID 応答パースへ
       await rxChar.startNotifications();
+      // 重複登録防止
+      if (!rxChar._taListenerAttached) {
+        rxChar.addEventListener('characteristicvaluechanged', bleOnData);
+        rxChar._taListenerAttached = true;
+      }
 
       // ELM327 初期化シーケンス
       await bleSleep(500);
@@ -682,6 +693,9 @@
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
+
+      // ポーリング開始
+      bleStartPolling();
     } catch (e) {
       console.error('[BLE init]', e);
       bleSetStatus('error');
@@ -693,6 +707,180 @@
   document.getElementById('btn-ble-scan').addEventListener('click', bleStartScan);
   document.getElementById('btn-ble-reconnect').addEventListener('click', bleQuickReconnect);
   document.getElementById('btn-ble-disconnect').addEventListener('click', bleDisconnect);
+
+  // ============================================================
+  // OBD2 PID ポーリング & パース (Phase 2)
+  // ============================================================
+  // 設定された PID を「高速」「低速」に振り分け、高速は毎サイクル送信、
+  // 低速はラウンドロビンで1つずつ送信する
+  // ── 高速: RPM (動きの激しい値、高頻度で必要)
+  // ── 低速: 水温 / 油温 / 吸気温 / スロットル (値の変化が緩やか)
+  let ACTIVE_PIDS_FAST = [];
+  let ACTIVE_PIDS_SLOW = [];
+  let _slowIdx = 0;
+
+  // ELM327 のエラー応答キーワード
+  const OBD_NOISE = ['NODATA', 'ERROR', 'UNABLE', 'SEARCHING', 'STOPPED', 'BUSBUSY'];
+
+  // ポーリング状態
+  const pollState = {
+    active:   false,
+    pidQueue: [],
+    curPid:   '',
+    buf:      '',
+    waiting:  false,
+  };
+  let _pollTimer    = null;
+  let _timeoutTimer = null;
+  let _obdUiThrottle = 0;
+
+  function recomputeActivePids() {
+    const pids = state.settings.pids;
+    const fast = new Set();
+    const slow = new Set();
+    if (pids.rpm)      fast.add('010C');  // RPM
+    if (pids.coolant)  slow.add('0105');
+    if (pids.oiltemp)  slow.add('015C');
+    if (pids.intake)   slow.add('010F');
+    if (pids.throttle) slow.add('0111');
+    ACTIVE_PIDS_FAST = [...fast];
+    ACTIVE_PIDS_SLOW = [...slow];
+    _slowIdx = 0;
+    pollState.pidQueue = [];
+    pollState.waiting  = false;
+    pollState.buf      = '';
+    clearTimeout(_timeoutTimer);
+  }
+
+  function nextPids() {
+    const pids = [...ACTIVE_PIDS_FAST];
+    if (ACTIVE_PIDS_SLOW.length > 0) {
+      pids.push(ACTIVE_PIDS_SLOW[_slowIdx % ACTIVE_PIDS_SLOW.length]);
+      _slowIdx++;
+    }
+    return pids;
+  }
+
+  // 50ms 間隔で 1 PID 送信。応答待ち中は何もしない
+  function bleStartPolling() {
+    recomputeActivePids();
+    pollState.active   = true;
+    pollState.pidQueue = nextPids();
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(() => {
+      if (!pollState.active || !state.obd.connected) {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        return;
+      }
+      if (pollState.waiting) return;
+      if (!pollState.pidQueue.length) pollState.pidQueue = nextPids();
+      if (!pollState.pidQueue.length) return;  // PIDが何も選択されていない
+      pollState.curPid  = pollState.pidQueue.shift();
+      pollState.waiting = true;
+      bleSend(pollState.curPid);
+      // 500ms 応答なければ諦めて次へ
+      _timeoutTimer = setTimeout(() => {
+        pollState.buf     = '';
+        pollState.waiting = false;
+      }, 500);
+    }, 50);
+  }
+
+  function bleStopPolling() {
+    pollState.active  = false;
+    pollState.buf     = '';
+    pollState.waiting = false;
+    if (_pollTimer)    { clearInterval(_pollTimer);    _pollTimer = null; }
+    if (_timeoutTimer) { clearTimeout(_timeoutTimer);  _timeoutTimer = null; }
+  }
+
+  // notify ハンドラ — 受信データをバッファに蓄積し、'>' で1応答完了として処理
+  function bleOnData(event) {
+    try {
+      pollState.buf += new TextDecoder().decode(event.target.value);
+    } catch (_) { return; }
+    // バッファ肥大化ガード
+    if (pollState.buf.length > 512) {
+      pollState.buf = '';
+      pollState.waiting = false;
+      return;
+    }
+    // ELM327 はプロンプト '>' で応答完了
+    if (!pollState.buf.includes('>')) return;
+    clearTimeout(_timeoutTimer);
+    const raw = pollState.buf;
+    pollState.buf = '';
+    pollState.waiting = false;
+    if (!state.obd.connected) return;
+
+    state.obd.lastUpdateMs = Date.now();
+
+    const lines = raw.split('\r')
+      .map(l => l.replace(/[\n>]/g, '').trim())
+      .filter(l => l.length > 3);
+    const pid = pollState.curPid;
+
+    if (lines.length > 0) {
+      const mode = state.settings.obdMode;
+      if (mode === 'single') {
+        // Single: 最初に解析できた行で打ち切り（単一ECU向け）
+        for (const l of lines) { if (parseObdLine(pid, l)) break; }
+      } else {
+        // Double: 全行をパース（UniCarScan + BMW など複数ECU応答向け）
+        for (const l of lines) parseObdLine(pid, l);
+      }
+    }
+
+    // 値が動いたらインジケータを更新（100ms throttle）
+    const now = Date.now();
+    if (now - _obdUiThrottle > 100) {
+      _obdUiThrottle = now;
+      updateObdLiveDisplay();
+    }
+  }
+
+  // PID 別パース
+  function parseObdLine(pid, raw) {
+    const s = raw.replace(/[\s\r\n>]/g, '').toUpperCase();
+    if (!s || OBD_NOISE.some(n => s.includes(n))) return false;
+    // 応答ヘッダ "4x" を探す (PID 010C → 41 0C ... の場合 "41" の "1" 部分は元の "1")
+    const hdr = '4' + pid.slice(1);
+    const idx = s.indexOf(hdr);
+    if (idx < 0) return false;
+    const v = s.slice(idx + 4);
+    try {
+      if (pid === '010C' && v.length >= 4) {
+        // RPM = ((A*256) + B) / 4
+        state.obd.rpm = (parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16)) >> 2;
+        return true;
+      } else if (pid === '0105' && v.length >= 2) {
+        state.obd.coolant = parseInt(v.slice(0, 2), 16) - 40;
+        return true;
+      } else if (pid === '015C' && v.length >= 2) {
+        state.obd.oiltemp = parseInt(v.slice(0, 2), 16) - 40;
+        return true;
+      } else if (pid === '010F' && v.length >= 2) {
+        state.obd.intake = parseInt(v.slice(0, 2), 16) - 40;
+        return true;
+      } else if (pid === '0111' && v.length >= 2) {
+        state.obd.throttle = Math.round(parseInt(v.slice(0, 2), 16) / 255 * 100);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[OBD PARSE]', e);
+    }
+    return false;
+  }
+
+  // Drive 画面の OBD インジケータに RPM を表示
+  function updateObdLiveDisplay() {
+    const el = document.getElementById('obd-rpm-indicator');
+    if (!el) return;
+    el.textContent = (state.obd.rpm !== null && state.obd.rpm !== undefined)
+      ? String(state.obd.rpm)
+      : '';
+  }
 
   // ============================================================
   // EDIT

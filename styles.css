@@ -1281,6 +1281,14 @@ body::before {
   background: var(--accent);
   animation: ble-pulse 1.2s ease-in-out infinite;
 }
+.obd-rpm {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0;
+}
+.obd-rpm:not(:empty)::before { content: ' '; }
+.obd-rpm:empty { display: none; }
 
 /* ============================================================
    LEAFLET DARK
