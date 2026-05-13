@@ -543,6 +543,8 @@
     device.addEventListener('gattserverdisconnected', () => {
       console.log('[BLE] gattserverdisconnected');
       bleStopPolling();
+      stopKeepAlive();
+      stopWatchdog();
       state.obd.txChar = null;
       state.obd.rxChar = null;
       // OBD 値もクリア
@@ -551,8 +553,16 @@
       state.obd.oiltemp = null;
       state.obd.intake = null;
       state.obd.throttle = null;
-      bleSetStatus('disconnected');
-      toast('OBD2 切断');
+      // 自動再接続が ON で、ユーザー意図でない切断（_reconnecting中でない）なら再接続を試みる
+      if (state.settings.obdAutoReconnect === 'on' && !_reconnecting) {
+        // 短いディレイの後 attemptReconnect を試行
+        setTimeout(() => {
+          if (!state.obd.connected) attemptReconnect();
+        }, 1500);
+      } else {
+        bleSetStatus('disconnected');
+        toast('OBD2 切断');
+      }
     });
   }
 
@@ -620,11 +630,18 @@
 
   // ── 切断 ────────────────────────────────────────────
   function bleDisconnect() {
+    // ユーザー意図の切断中は再接続させない（_reconnecting フラグを流用）
+    _reconnecting = true;
+    stopKeepAlive();
+    stopWatchdog();
+    bleStopPolling();
     if (state.obd.device?.gatt?.connected) {
       state.obd.device.gatt.disconnect();
     } else {
       bleSetStatus('disconnected');
     }
+    // 200ms 後にフラグを戻す（gattserverdisconnected イベント処理後）
+    setTimeout(() => { _reconnecting = false; }, 200);
   }
 
   // ── GATT サービス検出 + ELM327 初期化シーケンス ──────
@@ -693,8 +710,10 @@
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
 
-      // ポーリング開始
+      // ポーリング + 安定化機能を開始
       bleStartPolling();
+      startKeepAlive();
+      startWatchdog();
     } catch (e) {
       console.error('[BLE init]', e);
       bleSetStatus('error');
@@ -781,6 +800,7 @@
       _timeoutTimer = setTimeout(() => {
         pollState.buf     = '';
         pollState.waiting = false;
+        _consecutiveTimeouts++;
       }, 500);
     }, 50);
   }
@@ -813,6 +833,8 @@
     if (!state.obd.connected) return;
 
     state.obd.lastUpdateMs = Date.now();
+    _lastDataAt            = Date.now();
+    _consecutiveTimeouts   = 0;
 
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
@@ -863,6 +885,118 @@
     }
     return false;
   }
+
+  // ============================================================
+  // 接続安定化 (Phase 3)
+  // Watchdog: 通信断や応答無しを検知 → 設定に応じて自動再接続
+  // Keep-Alive: 30秒ごとに無害なATコマンドを送り Android の OS による
+  //             BLE スリープ強制切断を防ぐ
+  // ============================================================
+  const WATCHDOG_MS  = 5000;    // 5秒ごとにヘルスチェック
+  const NO_DATA_MS   = 15000;   // 15秒以上データ無 → 異常判定
+  const MAX_TIMEOUTS = 15;      // 連続15回タイムアウト → 異常判定
+  const KEEPALIVE_MS = 30000;   // Keep-Alive 送信間隔
+  const RECONNECT_SAFETY_MS = 20000;  // 再接続が固まった場合の安全弁
+
+  let _lastDataAt          = 0;
+  let _consecutiveTimeouts = 0;
+  let _watchdogTimer  = null;
+  let _keepAliveTimer = null;
+  let _reconnecting   = false;
+
+  function startKeepAlive() {
+    if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+    _keepAliveTimer = setInterval(() => {
+      if (!state.obd.connected || !state.obd.txChar) return;
+      // 'AT I' = ELM327 識別情報。無害で応答が返るため接続維持に最適
+      bleSend('AT I');
+    }, KEEPALIVE_MS);
+  }
+  function stopKeepAlive() {
+    if (_keepAliveTimer) {
+      clearInterval(_keepAliveTimer);
+      _keepAliveTimer = null;
+    }
+  }
+
+  function startWatchdog() {
+    if (_watchdogTimer) clearInterval(_watchdogTimer);
+    _lastDataAt          = Date.now();
+    _consecutiveTimeouts = 0;
+    _watchdogTimer = setInterval(() => {
+      if (!state.obd.connected || !pollState.active) return;
+      const stale   = (Date.now() - _lastDataAt) > NO_DATA_MS;
+      const tooMany = _consecutiveTimeouts >= MAX_TIMEOUTS;
+      if (stale || tooMany) {
+        console.warn('[WATCHDOG] stale=' + stale + ' tooMany=' + tooMany);
+        if (state.settings.obdAutoReconnect === 'on') {
+          attemptReconnect();
+        } else {
+          // 自動再接続OFFなら切断のみ
+          bleDisconnect();
+        }
+      }
+    }, WATCHDOG_MS);
+  }
+  function stopWatchdog() {
+    if (_watchdogTimer) {
+      clearInterval(_watchdogTimer);
+      _watchdogTimer = null;
+    }
+  }
+
+  async function attemptReconnect() {
+    if (_reconnecting) return;
+    _reconnecting = true;
+    bleSetStatus('connecting');
+    toast('OBD2 再接続中...');
+
+    // 安全弁: 20秒以内に完了しなければ強制リセット
+    const safety = setTimeout(() => {
+      if (_reconnecting) {
+        _reconnecting = false;
+        bleSetStatus('disconnected');
+        toast('再接続タイムアウト');
+      }
+    }, RECONNECT_SAFETY_MS);
+
+    try {
+      bleStopPolling();
+      stopKeepAlive();
+      stopWatchdog();
+      state.obd.txChar = null;
+      state.obd.rxChar = null;
+      pollState.buf     = '';
+      pollState.waiting = false;
+
+      if (state.obd.device?.gatt?.connected) {
+        try { state.obd.device.gatt.disconnect(); } catch (_) {}
+      }
+      await bleSleep(500);
+
+      if (state.obd.device) {
+        const server = await state.obd.device.gatt.connect();
+        await bleInitAfterConnect(server, state.obd.device);
+      } else {
+        bleSetStatus('disconnected');
+      }
+    } catch (e) {
+      console.error('[RECONNECT]', e);
+      bleSetStatus('disconnected');
+      toast('再接続失敗');
+    } finally {
+      clearTimeout(safety);
+      _reconnecting = false;
+    }
+  }
+
+  // 画面が再表示された時、誤検知を防ぐためカウンタをリセット
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.obd.connected) {
+      _lastDataAt          = Date.now();
+      _consecutiveTimeouts = 0;
+    }
+  });
 
   // ============================================================
   // EDIT
