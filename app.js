@@ -10,6 +10,7 @@
   // CONSTANTS
   // ============================================================
   const STORAGE_KEY = 'mirage.courses.v2';
+  const SETTINGS_KEY = 'timeattacker.settings.v1';
   const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const DEFAULT_CENTER = [35.6812, 139.7671];
   const R_EARTH = 6378137;
@@ -184,12 +185,52 @@
   }
 
   // ============================================================
+  // SETTINGS (Phase 0: UI + 永続化のみ。Phase 1 で BLE 接続が読み取って利用)
+  // ============================================================
+  const DEFAULT_SETTINGS = {
+    obdMode: 'double',          // 'single' | 'double'
+    obdAutoReconnect: 'on',     // 'on' | 'off'
+    pids: {
+      rpm:      true,
+      coolant:  true,
+      oiltemp:  true,
+      intake:   true,
+      throttle: true,
+    },
+  };
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      const s = JSON.parse(raw);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...s,
+        pids: { ...DEFAULT_SETTINGS.pids, ...(s.pids || {}) },
+      };
+    } catch (_) {
+      return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    }
+  }
+
+  function saveSettings(s) {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch (e) {
+      console.error('Settings save failed', e);
+      toast('設定保存失敗');
+    }
+  }
+
+  // ============================================================
   // STATE
   // ============================================================
   const state = {
     view: 'home',
     courses: loadCourses(),
     activeCourseId: null,
+    settings: loadSettings(),
 
     // Edit
     editMap: null,
@@ -227,6 +268,28 @@
 
     // CSV record buffer
     csvRows: [],
+
+    // ============================================================
+    // OBD2 リアルタイム値（Phase 1 で BLE 接続が更新する）
+    // 未接続時はすべて null。CSV / 分析機能はこれを読んで記録する
+    // ============================================================
+    obd: {
+      rpm:      null,  // 回転数 [rpm]
+      coolant:  null,  // 水温 [°C]
+      oiltemp:  null,  // 油温 [°C]
+      intake:   null,  // 吸気温 [°C]
+      throttle: null,  // スロットル開度 [%]
+      // BLE接続状態
+      connected: false,
+      lastUpdateMs: null,
+      // BLE デバイスハンドル（Phase 1）
+      device:     null,
+      txChar:     null,
+      rxChar:     null,
+      deviceName: null,
+      deviceId:   null,
+      status:     'disconnected',  // 'disconnected' | 'scanning' | 'connecting' | 'discovering' | 'connected' | 'error'
+    },
 
     // Wake lock
     wakeLock: null,
@@ -272,7 +335,7 @@
       card.innerHTML = `
         <div>
           <div class="name">${escapeHtml(c.name || '(無名コース)')}</div>
-          <div class="meta">${c.type === 'circuit' ? '周回' : 'P2P'} · ${sectionCount} セクション ${hasLines ? '' : '· 未完成'}</div>
+          <div class="meta">${c.type === 'circuit' ? '周回' : 'P2P'} · ${sectionCount} セクター線 ${hasLines ? '' : '· 未完成'}</div>
         </div>
         <div class="right">
           <div class="best ${bestCls}">${best}</div>
@@ -306,6 +369,330 @@
     state.activeCourseId = c.id;
     openEdit();
   });
+
+  // ============================================================
+  // SETTINGS SCREEN
+  // ============================================================
+  function openSettings() {
+    showScreen('settings');
+    renderSettings();
+  }
+
+  // 設定値を画面に反映
+  function renderSettings() {
+    const s = state.settings;
+
+    // Segmented toggles
+    document.querySelectorAll('.seg-toggle').forEach(group => {
+      const key = group.dataset.key;
+      const currentVal = s[key];
+      group.querySelectorAll('.seg-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === currentVal);
+      });
+    });
+
+    // PID checkboxes
+    document.getElementById('cb-pid-rpm').checked      = !!s.pids.rpm;
+    document.getElementById('cb-pid-coolant').checked  = !!s.pids.coolant;
+    document.getElementById('cb-pid-oiltemp').checked  = !!s.pids.oiltemp;
+    document.getElementById('cb-pid-intake').checked   = !!s.pids.intake;
+    document.getElementById('cb-pid-throttle').checked = !!s.pids.throttle;
+
+    // BLE 状態を画面に反映
+    if (typeof updateBleUI === 'function') updateBleUI();
+  }
+
+  // 現在のUIから設定オブジェクトを構築
+  function collectSettings() {
+    const s = JSON.parse(JSON.stringify(state.settings));
+
+    document.querySelectorAll('.seg-toggle').forEach(group => {
+      const key = group.dataset.key;
+      const active = group.querySelector('.seg-btn.active');
+      if (active) s[key] = active.dataset.value;
+    });
+
+    s.pids = {
+      rpm:      document.getElementById('cb-pid-rpm').checked,
+      coolant:  document.getElementById('cb-pid-coolant').checked,
+      oiltemp:  document.getElementById('cb-pid-oiltemp').checked,
+      intake:   document.getElementById('cb-pid-intake').checked,
+      throttle: document.getElementById('cb-pid-throttle').checked,
+    };
+    return s;
+  }
+
+  // Settings: 開くボタン
+  document.getElementById('btn-open-settings').addEventListener('click', openSettings);
+
+  // Settings: 戻るボタン (収集せずに破棄して戻る)
+  document.getElementById('btn-settings-back').addEventListener('click', () => {
+    showScreen('home');
+  });
+
+  // Settings: セグメントトグル (Single/Double, ON/OFF) のクリック処理
+  document.querySelectorAll('.seg-toggle').forEach(group => {
+    group.addEventListener('click', e => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn) return;
+      group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Settings: 保存
+  document.getElementById('btn-settings-save').addEventListener('click', () => {
+    state.settings = collectSettings();
+    saveSettings(state.settings);
+    toast('設定を保存しました');
+    showScreen('home');
+  });
+
+  // ============================================================
+  // BLE / OBD2 接続 (Phase 1: 接続のみ。PID 取得は Phase 2)
+  // ============================================================
+  // ELM327 互換アダプタが使う可能性のあるサービス UUID
+  const ELM_SERVICES = [
+    '0000ffe0-0000-1000-8000-00805f9b34fb',
+    '0000fff0-0000-1000-8000-00805f9b34fb',
+    '000018f0-0000-1000-8000-00805f9b34fb',
+    '0000ffe5-0000-1000-8000-00805f9b34fb',
+  ];
+  const BLE_DEVICE_KEY = 'timeattacker.ble.device.v1';
+
+  function bleSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ATコマンド送信
+  function bleSend(cmd) {
+    if (!state.obd.txChar) return;
+    state.obd.txChar.writeValueWithoutResponse(
+      new TextEncoder().encode(cmd + '\r')
+    ).catch(e => console.warn('[BLE SEND]', e));
+  }
+
+  // 接続状態の UI 更新（設定画面 + Drive 画面のインジケータ）
+  function updateBleUI() {
+    const status = state.obd.status;
+    const connected = (status === 'connected');
+
+    // 設定画面 — 状態インジケータ
+    const ind = document.getElementById('ble-status-indicator');
+    const txt = document.getElementById('ble-status-text');
+    const name = document.getElementById('ble-device-name');
+    if (ind && txt) {
+      ind.classList.remove('connected', 'connecting', 'scanning', 'error');
+      const statusMap = {
+        disconnected: '未接続',
+        scanning:     'スキャン中…',
+        connecting:   '接続中…',
+        discovering:  'サービス検出中…',
+        connected:    '接続済み',
+        error:        '接続失敗',
+      };
+      txt.textContent = statusMap[status] || status;
+      if (status !== 'disconnected') ind.classList.add(status);
+      if (name) name.textContent = connected && state.obd.deviceName ? state.obd.deviceName : '';
+    }
+
+    // 設定画面 — ボタン表示切替
+    const scanBtn       = document.getElementById('btn-ble-scan');
+    const reconnectBtn  = document.getElementById('btn-ble-reconnect');
+    const disconnectBtn = document.getElementById('btn-ble-disconnect');
+    if (scanBtn && reconnectBtn && disconnectBtn) {
+      const saved = bleLoadDevice();
+      const busy = (status === 'scanning' || status === 'connecting' || status === 'discovering');
+      scanBtn.disabled = busy;
+      scanBtn.textContent = busy ? '接続処理中…' : 'BLE スキャン & 接続';
+      reconnectBtn.style.display = (!connected && !busy && saved) ? '' : 'none';
+      disconnectBtn.style.display = connected ? '' : 'none';
+    }
+
+    // Drive 画面 — OBD インジケータ
+    const obdInd = document.getElementById('obd-indicator');
+    if (obdInd) {
+      obdInd.classList.remove('connected', 'connecting');
+      if (status === 'connected') obdInd.classList.add('connected');
+      else if (status === 'scanning' || status === 'connecting' || status === 'discovering') {
+        obdInd.classList.add('connecting');
+      }
+    }
+  }
+
+  function bleSetStatus(s) {
+    state.obd.status = s;
+    state.obd.connected = (s === 'connected');
+    updateBleUI();
+  }
+
+  // デバイス記憶（次回起動でクイック再接続用）
+  function bleSaveDevice(id, name) {
+    try { localStorage.setItem(BLE_DEVICE_KEY, JSON.stringify({ id, name })); } catch (_) {}
+  }
+  function bleLoadDevice() {
+    try { return JSON.parse(localStorage.getItem(BLE_DEVICE_KEY)); } catch (_) { return null; }
+  }
+
+  // 切断ハンドラ（GATT 切断時の状態クリア）
+  function bleAddDisconnectHandler(device) {
+    if (device._taDisconnectHandlerAdded) return;
+    device._taDisconnectHandlerAdded = true;
+    device.addEventListener('gattserverdisconnected', () => {
+      console.log('[BLE] gattserverdisconnected');
+      state.obd.txChar = null;
+      state.obd.rxChar = null;
+      // OBD 値もクリア
+      state.obd.rpm = null;
+      state.obd.coolant = null;
+      state.obd.oiltemp = null;
+      state.obd.intake = null;
+      state.obd.throttle = null;
+      bleSetStatus('disconnected');
+      toast('OBD2 切断');
+    });
+  }
+
+  // ── スキャン & 接続 ─────────────────────────────────
+  async function bleStartScan() {
+    if (!navigator.bluetooth) {
+      toast('このブラウザは Web Bluetooth 非対応です');
+      return;
+    }
+    try {
+      bleSetStatus('scanning');
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ELM_SERVICES,
+      });
+      state.obd.device = device;
+      bleSaveDevice(device.id, device.name || 'Unknown');
+      bleAddDisconnectHandler(device);
+
+      bleSetStatus('connecting');
+      const server = await device.gatt.connect();
+      await bleInitAfterConnect(server, device);
+    } catch (e) {
+      console.error('[BLE scan]', e);
+      bleSetStatus('disconnected');
+      if (e.name === 'NotFoundError') {
+        // ユーザーがキャンセル
+      } else {
+        toast('接続失敗: ' + (e.message || e.name));
+      }
+    }
+  }
+
+  // ── 前回のデバイスへ再接続 ──────────────────────────
+  async function bleQuickReconnect() {
+    const saved = bleLoadDevice();
+    if (!saved) {
+      toast('保存されたデバイスがありません');
+      return;
+    }
+    if (!navigator.bluetooth?.getDevices) {
+      toast('再接続非対応のブラウザです。スキャンしてください');
+      return;
+    }
+    try {
+      bleSetStatus('scanning');
+      const devices = await navigator.bluetooth.getDevices();
+      const device = devices.find(d => d.id === saved.id);
+      if (!device) {
+        bleSetStatus('disconnected');
+        toast('デバイスが見つかりません。スキャンしてください');
+        return;
+      }
+      state.obd.device = device;
+      bleAddDisconnectHandler(device);
+      bleSetStatus('connecting');
+      const server = await device.gatt.connect();
+      await bleInitAfterConnect(server, device);
+    } catch (e) {
+      console.error('[BLE quick]', e);
+      bleSetStatus('disconnected');
+      toast('再接続失敗: ' + (e.message || e.name));
+    }
+  }
+
+  // ── 切断 ────────────────────────────────────────────
+  function bleDisconnect() {
+    if (state.obd.device?.gatt?.connected) {
+      state.obd.device.gatt.disconnect();
+    } else {
+      bleSetStatus('disconnected');
+    }
+  }
+
+  // ── GATT サービス検出 + ELM327 初期化シーケンス ──────
+  async function bleInitAfterConnect(server, device) {
+    try {
+      bleSetStatus('discovering');
+      let txChar = null, rxChar = null;
+
+      // ELM327 標準サービスを優先試行
+      for (const svcUuid of ELM_SERVICES) {
+        try {
+          const svc = await server.getPrimaryService(svcUuid);
+          const chars = await svc.getCharacteristics();
+          for (const c of chars) {
+            if ((c.properties.notify || c.properties.indicate) && !rxChar) rxChar = c;
+            if ((c.properties.writeWithoutResponse || c.properties.write) && !txChar) txChar = c;
+          }
+          if (txChar && rxChar) break;
+        } catch (_) { /* このサービスは無い、次へ */ }
+      }
+
+      // フォールバック: 全サービスから探索（標準BLEサービス除外）
+      if (!txChar || !rxChar) {
+        const STD = ['00001800', '00001801', '0000180a', '0000180f'];
+        const services = await server.getPrimaryServices();
+        for (const svc of services) {
+          if (STD.some(s => svc.uuid.startsWith(s))) continue;
+          try {
+            const chars = await svc.getCharacteristics();
+            for (const c of chars) {
+              if ((c.properties.notify || c.properties.indicate) && !rxChar) rxChar = c;
+              if ((c.properties.writeWithoutResponse || c.properties.write) && !txChar) txChar = c;
+            }
+            if (txChar && rxChar) break;
+          } catch (_) {}
+        }
+      }
+
+      if (!txChar || !rxChar) {
+        bleSetStatus('error');
+        toast('ELM327 互換のキャラクタリスティックが見つかりません');
+        return;
+      }
+
+      state.obd.txChar = txChar;
+      state.obd.rxChar = rxChar;
+      state.obd.deviceName = device.name || 'Unknown';
+      state.obd.deviceId   = device.id;
+
+      // 通知を有効化（Phase 2 でこのイベントリスナを使ってPID応答をパースする）
+      await rxChar.startNotifications();
+
+      // ELM327 初期化シーケンス
+      await bleSleep(500);
+      bleSend('ATZ'); await bleSleep(1600);
+      for (const cmd of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATST FF', 'ATSP0']) {
+        bleSend(cmd);
+        await bleSleep(400);
+      }
+
+      bleSetStatus('connected');
+      toast(`OBD2 接続: ${state.obd.deviceName}`);
+    } catch (e) {
+      console.error('[BLE init]', e);
+      bleSetStatus('error');
+      toast('初期化失敗: ' + (e.message || e.name));
+    }
+  }
+
+  // イベントバインド
+  document.getElementById('btn-ble-scan').addEventListener('click', bleStartScan);
+  document.getElementById('btn-ble-reconnect').addEventListener('click', bleQuickReconnect);
+  document.getElementById('btn-ble-disconnect').addEventListener('click', bleDisconnect);
 
   // ============================================================
   // EDIT
@@ -441,7 +828,7 @@
     }
     state.editPendingPoint = null;
     if (mode) {
-      const labels = { start: 'スタート線', finish: 'フィニッシュ線', section: 'セクション線' };
+      const labels = { start: 'スタート線', finish: 'フィニッシュ線', section: 'セクター線' };
       setStatus(`${labels[mode]}: 1点目をマップ上でタップ`, 'warn');
     } else {
       setStatus('上のボタンから線の種類を選択', '');
@@ -480,12 +867,12 @@
   document.getElementById('btn-clear-section').addEventListener('click', () => {
     const c = getActiveCourse();
     if (!c) return;
-    if (!confirm('全セクション線を削除しますか？')) return;
+    if (!confirm('全セクター線を削除しますか？')) return;
     c.sections = [];
     c.bestLap = null;
     saveCourses();
     redrawEditLines();
-    toast('セクション線を消去');
+    toast('セクター線を消去');
   });
 
   document.querySelector('[data-action="back-home"]').addEventListener('click', () => {
@@ -573,7 +960,7 @@
     const c = getActiveCourse();
     const list = document.getElementById('sections-edit-list');
     if (!c || !c.sections || c.sections.length === 0) {
-      list.innerHTML = '<div class="splits-empty">セクション線を描くと表示されます</div>';
+      list.innerHTML = '<div class="splits-empty">セクター線を描くと表示されます</div>';
       return;
     }
     list.innerHTML = '';
@@ -820,6 +1207,8 @@
     // CSV recording
     if (state.driveActive && state.csvRows.length < RECORD_LIMIT) {
       const dt = new Date(fix.t);
+      // OBD2 値の安全な文字列化（null → '' で CSV の空セルになる）
+      const obdStr = v => (v === null || v === undefined) ? '' : v;
       state.csvRows.push([
         dt.toISOString(),
         fix.lat.toFixed(7),
@@ -830,6 +1219,12 @@
         state.currentSectorIdx + 1,
         state.g_lat.toFixed(3),
         state.g_lon.toFixed(3),
+        // ── OBD2 カラム（Phase 1 未接続時は空欄）────────
+        obdStr(state.obd.rpm),
+        obdStr(state.obd.coolant),
+        obdStr(state.obd.oiltemp),
+        obdStr(state.obd.intake),
+        obdStr(state.obd.throttle),
       ]);
     }
 
@@ -986,7 +1381,7 @@
     const c = getActiveCourse();
     const grid = document.getElementById('splits-grid');
     if (!c || !c.sections || c.sections.length === 0) {
-      grid.innerHTML = '<div class="splits-empty">セクション未設定</div>';
+      grid.innerHTML = '<div class="splits-empty">セクター未設定</div>';
       return;
     }
     grid.innerHTML = '';
@@ -1399,7 +1794,12 @@
       return;
     }
     const c = getActiveCourse();
-    const header = ['ISO_TIME', 'LAT', 'LON', 'ACC_M', 'SPEED_KMH', 'LAP', 'SECTOR', 'G_LAT', 'G_LON'];
+    const header = [
+      'ISO_TIME', 'LAT', 'LON', 'ACC_M', 'SPEED_KMH',
+      'LAP', 'SECTOR', 'G_LAT', 'G_LON',
+      // OBD2 カラム (Phase 1 で BLE 接続時に値が入る、未接続時は空)
+      'RPM', 'COOLANT_C', 'OIL_TEMP_C', 'INTAKE_C', 'THROTTLE_PCT',
+    ];
     const lines = [header.join(',')].concat(state.csvRows.map(r => r.join(',')));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -1443,13 +1843,13 @@
   // ============================================================
   renderHome();
   // ============================================================
-  // SPLASH → WARNING 自動遷移（3秒）
+  // SPLASH → WARNING 自動遷移（2秒）
   // ============================================================
   renderHome();
   showScreen('splash');
   setTimeout(() => {
     showScreen('warning');
-  }, 3000);
+  }, 2000);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

@@ -87,6 +87,7 @@ so inaccuracies may occur depending on the environment.</div>
         <span class="bm-maker">藤井工藝</span>
         <span class="bm-ver">Ver.1.0</span>
       </div>
+      <button id="btn-open-settings" class="icon-btn settings-btn" title="設定">⚙</button>
     </header>
 
     <main class="home-main">
@@ -103,8 +104,131 @@ so inaccuracies may occur depending on the environment.</div>
       </button>
 
       <div class="hint">
-        マップ上で線を引き、スタート / ゴール / セクションを定義します。
+        マップ上で線を引き、スタート / ゴール / セクター線を定義します。
       </div>
+    </main>
+  </section>
+
+  <!-- ====== SETTINGS SCREEN ====== -->
+  <section id="screen-settings" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-action="back-home" id="btn-settings-back">‹</button>
+      <div class="brand">
+        <span class="brand-name">SETTINGS</span>
+      </div>
+      <div class="brand-meta"><span class="bm-ver">設定</span></div>
+    </header>
+
+    <main class="settings-main">
+
+      <!-- ── OBD2 接続 ─────────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>OBD2 接続</span>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">接続モード</div>
+            <div class="setting-desc">UniCarScan + BMW は Double 推奨</div>
+          </div>
+          <div class="seg-toggle" data-key="obdMode">
+            <button class="seg-btn"        data-value="single">Single</button>
+            <button class="seg-btn active"  data-value="double">Double</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">自動再接続</div>
+            <div class="setting-desc">通信断時に自動で復旧を試みる</div>
+          </div>
+          <div class="seg-toggle" data-key="obdAutoReconnect">
+            <button class="seg-btn active" data-value="on">ON</button>
+            <button class="seg-btn"       data-value="off">OFF</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 取得項目 ─────────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>取得項目</span>
+        </div>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-rpm" checked>
+          <span class="check-text">
+            <span class="check-name">回転数</span>
+            <span class="check-desc">PID 010C — 1回転 / cycle で優先取得</span>
+          </span>
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-coolant" checked>
+          <span class="check-text">
+            <span class="check-name">水温</span>
+            <span class="check-desc">PID 0105</span>
+          </span>
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-oiltemp" checked>
+          <span class="check-text">
+            <span class="check-name">油温</span>
+            <span class="check-desc">PID 015C</span>
+          </span>
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-intake" checked>
+          <span class="check-text">
+            <span class="check-name">吸気温</span>
+            <span class="check-desc">PID 010F</span>
+          </span>
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-throttle" checked>
+          <span class="check-text">
+            <span class="check-name">スロットル開度</span>
+            <span class="check-desc">PID 0111</span>
+          </span>
+        </label>
+      </div>
+
+      <!-- ── 接続デバイス ───────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>接続デバイス</span>
+        </div>
+
+        <div class="ble-status-row">
+          <div class="ble-status-indicator" id="ble-status-indicator">
+            <span class="ble-dot"></span>
+            <span class="ble-status-text" id="ble-status-text">未接続</span>
+          </div>
+          <div class="ble-device-name" id="ble-device-name"></div>
+        </div>
+
+        <div class="ble-actions">
+          <button id="btn-ble-scan" class="btn-primary">BLE スキャン &amp; 接続</button>
+          <button id="btn-ble-reconnect" class="btn-ghost" style="display:none">前回のデバイスへ再接続</button>
+          <button id="btn-ble-disconnect" class="btn-ghost" style="display:none">切断</button>
+        </div>
+
+        <div class="ble-hint" id="ble-hint">
+          UniCarScan 2000 など ELM327 互換アダプタに対応。Android Chrome 推奨。
+        </div>
+      </div>
+
+      <div class="settings-foot">
+        <button id="btn-settings-save" class="btn-primary big">保存</button>
+      </div>
+
     </main>
   </section>
 
@@ -120,7 +244,7 @@ so inaccuracies may occur depending on the environment.</div>
     <div class="edit-mode-bar">
       <button class="mode-btn" data-mode="start">スタート線</button>
       <button class="mode-btn" data-mode="finish">フィニッシュ線</button>
-      <button class="mode-btn" data-mode="section">セクション線</button>
+      <button class="mode-btn" data-mode="section">セクター線</button>
       <button class="icon-btn locate-btn" data-action="locate-me" title="現在地へ">⌖</button>
       <div class="course-type">
         <label>
@@ -135,7 +259,7 @@ so inaccuracies may occur depending on the environment.</div>
     <div id="map-edit" class="map"></div>
 
     <div class="bottom-bar">
-      <button id="btn-clear-section" class="btn-ghost">セクション全消去</button>
+      <button id="btn-clear-section" class="btn-ghost">セクター線全消去</button>
       <button id="btn-start-drive" class="btn-primary">計測 ▶</button>
     </div>
   </section>
@@ -178,10 +302,10 @@ so inaccuracies may occur depending on the environment.</div>
 
         <div class="form-divider"></div>
 
-        <div class="section-title small"><span class="dot"></span><span>セクション目標タイム</span></div>
+        <div class="section-title small"><span class="dot"></span><span>セクター目標タイム</span></div>
         <div class="target-hint">例: <code>0520.10</code> → <strong>05:20.10</strong>（MMSS.CC）</div>
         <div id="sections-edit-list" class="sections-edit-list">
-          <div class="splits-empty">セクション線を描くと表示されます</div>
+          <div class="splits-empty">セクター線を描くと表示されます</div>
         </div>
 
       </div>
@@ -203,6 +327,10 @@ so inaccuracies may occur depending on the environment.</div>
       <div class="gps-indicator" id="gps-indicator">
         <span class="gps-dot"></span>
         <span id="gps-acc">--</span>
+      </div>
+      <div class="obd-indicator" id="obd-indicator" title="OBD2 接続状態">
+        <span class="obd-dot"></span>
+        <span class="obd-label">OBD</span>
       </div>
     </header>
 
@@ -240,7 +368,7 @@ so inaccuracies may occur depending on the environment.</div>
       </div>
 
       <div class="now-sector-row">
-        <span class="ns-bar-label">NowSector</span>
+        <span class="ns-bar-label">SECTOR</span>
         <span id="now-sector-num" class="ns-bar-num">1</span>
       </div>
       <div class="big-timer">
