@@ -1726,9 +1726,11 @@
     toast('セクター線を消去');
   });
 
-  document.querySelector('[data-action="back-home"]').addEventListener('click', () => {
-    showScreen('home');
-    renderHome();
+  document.querySelectorAll('[data-action="back-home"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showScreen('home');
+      renderHome();
+    });
   });
 
   document.querySelector('[data-action="delete-course"]').addEventListener('click', () => {
@@ -2347,15 +2349,11 @@
         }
       }
 
-      // G-ball update from smoothed motion (calibrated to START position)
+      // G-ball update — state.g_lat/g_lon は motionHandler で重力除去+画面回転変換済み
       try {
         if (state.gball) {
-          const lat = state.g_smooth.x - state.g_calib.x;
-          const lon = state.g_smooth.z - state.g_calib.z;
-          state.g_lat = lat;
-          state.g_lon = lon;
-          state.gball.draw(lat, lon);
-          const tg = Math.min(Math.sqrt(lat * lat + lon * lon), G_RANGE);
+          state.gball.draw(state.g_lat, state.g_lon);
+          const tg = Math.min(Math.sqrt(state.g_lat * state.g_lat + state.g_lon * state.g_lon), G_RANGE);
           document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
         }
         if (state.speedGraph) state.speedGraph.draw();
@@ -2566,26 +2564,93 @@
   // EMA smoothing applied to suppress accelerometer noise.
   // α = 0.15 → ~7-sample (≈70 ms at 100 Hz) effective time constant.
   // ============================================================
-  const G_SMOOTH_ALPHA = 0.15;
-  let motionHandler = null;
+  // G-SENSOR (重力ローパス追従 + 画面回転対応 — GT_DASH と共通)
+  //
+  //  1. 重力ベクトルを α=0.92 で動的に推定し、デバイスの傾き変化に追従
+  //  2. 純加速度 = 生加速度 − 推定重力（瞬時応答、出力スムージング無し）
+  //  3. screen.orientation.angle に応じて画面座標へ回転変換
+  //  4. 縦G(車両前後) は Z 軸（画面奥行）— 画面回転で変わらないため
+  //  5. 50ms throttle（20Hz）で省電力
+  // ============================================================
+  const G_PER_MS2     = 1 / 9.80665;
+  const G_LP_ALPHA    = 0.92;          // 重力推定のローパス係数（GT_DASHと同じ）
+  let _gravX = 0, _gravY = 0, _gravZ = 0;
+  let _gInit         = false;
+  let _calibPending  = false;
+  let _lastMotionAt  = 0;
+  let motionHandler        = null;
+  let orientationHandler   = null;
+
+  function getOrientationAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+      return screen.orientation.angle;
+    }
+    if (typeof window.orientation === 'number') {
+      let a = window.orientation;
+      if (a === -90) a = 270;
+      return a;
+    }
+    return 0;
+  }
 
   function attachMotionListener() {
     if (state.motionEnabled) return;
     motionHandler = (e) => {
-      const ag = e.accelerationIncludingGravity;
-      if (!ag) return;
-      const x = (ag.x || 0) / 9.81;        // lateral raw (G)
-      const y = (ag.y || 0) / 9.81;        // vertical raw (mostly gravity)
-      const z = -(ag.z || 0) / 9.81;       // longitudinal raw (Z negated)
-      state.g_raw.x = x;
-      state.g_raw.y = y;
-      state.g_raw.z = z;
-      // EMA low-pass filter
-      const a = G_SMOOTH_ALPHA;
-      state.g_smooth.x = a * x + (1 - a) * state.g_smooth.x;
-      state.g_smooth.z = a * z + (1 - a) * state.g_smooth.z;
+      const now = Date.now();
+      if (now - _lastMotionAt < 50) return;  // 20Hz throttle
+      _lastMotionAt = now;
+
+      const a = e.accelerationIncludingGravity;
+      if (!a || a.x == null) return;
+      const ax = a.x || 0, ay = a.y || 0, az = a.z || 0;
+
+      // 重力推定（初回 or キャリブ要求 or 回転変化後 → 即セット）
+      if (!_gInit || _calibPending) {
+        _gravX = ax; _gravY = ay; _gravZ = az;
+        _gInit = true;
+        _calibPending = false;
+      } else {
+        _gravX = G_LP_ALPHA * _gravX + (1 - G_LP_ALPHA) * ax;
+        _gravY = G_LP_ALPHA * _gravY + (1 - G_LP_ALPHA) * ay;
+        _gravZ = G_LP_ALPHA * _gravZ + (1 - G_LP_ALPHA) * az;
+      }
+
+      // 純加速度 [m/s²]
+      const lx = ax - _gravX;
+      const ly = ay - _gravY;
+      const lz = az - _gravZ;
+
+      // 画面回転を考慮した座標変換
+      const angle = getOrientationAngle();
+      const rad   = angle * Math.PI / 180;
+      const cos   = Math.cos(rad);
+      const sin   = Math.sin(rad);
+      // 画面右方向 sx（端末を縦/横どちらに持ってもこれが正しい "lateral"）
+      const sx = lx * cos + ly * sin;
+      // 縦G（車両前後）は画面奥行 −lz（forward = +）
+      const lonG = -lz;
+
+      // [G]単位に変換して state へ反映（瞬時応答）
+      state.g_lat = sx   * G_PER_MS2;
+      state.g_lon = lonG * G_PER_MS2;
+
+      // 互換性のため g_smooth/g_raw も同期（既存コードが参照する場合に備える）
+      state.g_smooth.x = state.g_lat;
+      state.g_smooth.z = state.g_lon;
+      state.g_raw.x = ax * G_PER_MS2;
+      state.g_raw.y = ay * G_PER_MS2;
+      state.g_raw.z = az * G_PER_MS2;
     };
-    window.addEventListener('devicemotion', motionHandler);
+
+    window.addEventListener('devicemotion', motionHandler, { passive: true });
+
+    // 画面回転時は重力推定をリセット（向きが変わると重力ベクトルも変わるため）
+    orientationHandler = () => { _gInit = false; };
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', orientationHandler);
+    }
+    window.addEventListener('orientationchange', orientationHandler);
+
     state.motionEnabled = true;
   }
 
@@ -2594,16 +2659,27 @@
       window.removeEventListener('devicemotion', motionHandler);
       motionHandler = null;
     }
+    if (orientationHandler) {
+      if (screen.orientation && screen.orientation.removeEventListener) {
+        screen.orientation.removeEventListener('change', orientationHandler);
+      }
+      window.removeEventListener('orientationchange', orientationHandler);
+      orientationHandler = null;
+    }
     state.motionEnabled = false;
   }
 
   /**
-   * Capture the current smoothed G reading as the zero-point.
-   * Called automatically at START, and manually via the ZERO button.
+   * G ボールのゼロ点補正。
+   * GT_DASH と同じ動作: 次のモーションイベントで重力推定を現在値にリセットする。
+   * これにより端末をその姿勢で水平と見なし、以降の動きを純加速度として検出する。
    */
   function calibrateGBall() {
-    state.g_calib.x = state.g_smooth.x;
-    state.g_calib.z = state.g_smooth.z;
+    _calibPending = true;
+    state.g_lat = 0;
+    state.g_lon = 0;
+    state.g_smooth.x = 0;
+    state.g_smooth.z = 0;
   }
 
   // Manual ZERO button (always available on drive screen)
