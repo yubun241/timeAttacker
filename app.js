@@ -880,6 +880,38 @@
       .replace(/"/g, '&quot;');
   }
 
+  // ============================================================
+  // SESSION ANALYSIS  (Phase 5b + 5c)
+  // ============================================================
+
+  // 利用可能なメトリック定義
+  // columns 順: 0=iso_time 1=lat 2=lon 3=acc 4=speed_kmh 5=lap 6=sector 7=g_lat 8=g_lon
+  //             9=rpm 10=coolant 11=oilTemp 12=intake 13=throttle
+  const METRICS = [
+    { key: 'speed',    label: 'SPEED',    col: 4,  unit: 'km/h', requiresObd: false, abs: false },
+    { key: 'lat_g',    label: '横G',      col: 7,  unit: 'G',    requiresObd: false, abs: true  },
+    { key: 'lon_g',    label: '前後G',    col: 8,  unit: 'G',    requiresObd: false, abs: true  },
+    { key: 'rpm',      label: 'RPM',      col: 9,  unit: '',     requiresObd: true,  abs: false },
+    { key: 'throttle', label: 'THROTTLE', col: 13, unit: '%',    requiresObd: true,  abs: false },
+    { key: 'coolant',  label: '水温',     col: 10, unit: '°C',   requiresObd: true,  abs: false },
+    { key: 'oilTemp',  label: '油温',     col: 11, unit: '°C',   requiresObd: true,  abs: false },
+  ];
+
+  // 複数ラップ重ね合わせ時のラップ色（高コントラスト）
+  const LAP_COLORS = [
+    '#ffb000', '#4fc3f7', '#3fb950', '#f85149', '#a371f7',
+    '#ff8c00', '#00d4ff', '#22e54a', '#ff3d1a', '#bd93f9',
+  ];
+
+  // 分析画面のローカル状態
+  const analysis = {
+    sessionId:    null,
+    metric:       'speed',     // 選択中のメトリック
+    selectedLaps: [],          // 表示中ラップ番号の配列
+    map:          null,
+    layers:       [],          // 描画したレイヤー配列（クリア用）
+  };
+
   function openSessionDetail(sessionId) {
     const sessions = loadSessions();
     const s = sessions.find(x => x.id === sessionId);
@@ -888,7 +920,9 @@
       return;
     }
     _currentSessionId = sessionId;
+    analysis.sessionId = sessionId;
 
+    // サマリ
     document.getElementById('session-course-name').textContent = s.courseName || '--';
     document.getElementById('session-date').textContent = formatSessionDate(s.startTime);
     document.getElementById('session-lap-count').textContent = String(s.laps.length);
@@ -909,12 +943,257 @@
     obdFlag.querySelector('.summary-value').textContent = s.hasObdData ? '有' : '無';
     obdFlag.querySelector('.summary-value').style.color = s.hasObdData ? '#3fb950' : 'var(--fg-dim)';
 
-    // ラップ一覧
+    // 初期選択: ベストラップ単独
+    analysis.selectedLaps = (s.bestLapIdx >= 0 && s.laps[s.bestLapIdx])
+      ? [s.laps[s.bestLapIdx].number]
+      : (s.laps.length > 0 ? [s.laps[0].number] : []);
+
+    // OBD データ無いセッションでは初期メトリックを speed に強制
+    if (!s.hasObdData && METRICS.find(m => m.key === analysis.metric)?.requiresObd) {
+      analysis.metric = 'speed';
+    }
+
+    renderMetricChips(s);
+    renderLapChips(s);
     renderSessionLapList(s);
 
     showScreen('session');
+    // マップは画面表示後にサイズ計算する必要あり
+    setTimeout(() => initSessionMap(s), 50);
   }
 
+  // ── メトリック選択チップを描画 ───────────────────
+  function renderMetricChips(s) {
+    const wrap = document.getElementById('metric-chips');
+    wrap.innerHTML = '';
+    METRICS.forEach(m => {
+      // OBD 無セッションでは OBD 系を非表示
+      if (m.requiresObd && !s.hasObdData) return;
+      const chip = document.createElement('button');
+      chip.className = 'chip' + (m.key === analysis.metric ? ' active' : '');
+      chip.textContent = m.label;
+      chip.addEventListener('click', () => {
+        analysis.metric = m.key;
+        renderMetricChips(s);
+        drawAnalysis(s);
+      });
+      wrap.appendChild(chip);
+    });
+  }
+
+  // ── ラップ選択チップを描画 ───────────────────────
+  function renderLapChips(s) {
+    const wrap = document.getElementById('lap-chips');
+    wrap.innerHTML = '';
+    s.laps.forEach((lap, i) => {
+      const isBest = (i === s.bestLapIdx);
+      const isSelected = analysis.selectedLaps.includes(lap.number);
+      const chip = document.createElement('button');
+      chip.className = 'chip' +
+        (isSelected ? ' active' : '') +
+        (isBest ? ' lap-best' : '');
+      chip.textContent = `L${lap.number}` + (isBest ? '★' : '');
+      chip.addEventListener('click', () => {
+        // 複数選択トグル
+        const idx = analysis.selectedLaps.indexOf(lap.number);
+        if (idx >= 0) analysis.selectedLaps.splice(idx, 1);
+        else          analysis.selectedLaps.push(lap.number);
+        // 必ず1つは選択
+        if (analysis.selectedLaps.length === 0) analysis.selectedLaps.push(lap.number);
+        renderLapChips(s);
+        renderSessionLapList(s);
+        drawAnalysis(s);
+      });
+      wrap.appendChild(chip);
+    });
+  }
+
+  // ── 凡例（カラースケール）の更新 ───────────────────
+  function updateLegend(min, max, unit) {
+    const fmt = (v) => {
+      if (!isFinite(v)) return '--';
+      const abs = Math.abs(v);
+      if (abs >= 100)  return Math.round(v).toString();
+      if (abs >= 10)   return v.toFixed(1);
+      return v.toFixed(2);
+    };
+    document.getElementById('legend-min').textContent = fmt(min) + unit;
+    document.getElementById('legend-max').textContent = fmt(max) + unit;
+
+    // 複数ラップ選択中は凡例グラデーションを薄くしてラップ色を強調
+    const legendRow = document.getElementById('legend-row');
+    const isMulti = analysis.selectedLaps.length > 1;
+    legendRow.style.opacity = isMulti ? '0.35' : '1';
+  }
+
+  // ── マップ初期化 ───────────────────────────────────
+  function initSessionMap(s) {
+    const mapEl = document.getElementById('session-map');
+    const emptyEl = document.getElementById('session-map-empty');
+
+    // 既存マップは破棄
+    if (analysis.map) {
+      try { analysis.map.remove(); } catch (_) {}
+      analysis.map = null;
+      analysis.layers = [];
+    }
+
+    // GPS データがあるか確認
+    const validRows = s.rows.filter(r =>
+      isFinite(parseFloat(r[1])) && isFinite(parseFloat(r[2])));
+    if (validRows.length === 0) {
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+    emptyEl.classList.add('hidden');
+
+    // 中心位置・範囲を計算
+    const lats = validRows.map(r => parseFloat(r[1]));
+    const lons = validRows.map(r => parseFloat(r[2]));
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+
+    analysis.map = L.map(mapEl, {
+      zoomControl: false,
+      attributionControl: false,
+      preferCanvas: true,
+    });
+    L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(analysis.map);
+
+    // 境界 fit
+    analysis.map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [20, 20] });
+
+    drawAnalysis(s);
+  }
+
+  // ── メイン描画ロジック ─────────────────────────────
+  function drawAnalysis(s) {
+    if (!analysis.map) return;
+    // 既存レイヤー削除
+    analysis.layers.forEach(l => analysis.map.removeLayer(l));
+    analysis.layers = [];
+
+    const isMulti = analysis.selectedLaps.length > 1;
+    const metricDef = METRICS.find(m => m.key === analysis.metric);
+
+    if (isMulti) {
+      // 複数ラップ: 各ラップを別色でベタ塗り
+      analysis.selectedLaps.forEach(lapNum => {
+        const colorIdx = (lapNum - 1) % LAP_COLORS.length;
+        const color = LAP_COLORS[colorIdx];
+        drawLapSolid(s, lapNum, color);
+      });
+      // 凡例ダミー: メトリック範囲だけは出しておく
+      const range = computeMetricRange(s, analysis.selectedLaps, metricDef);
+      updateLegend(range.min, range.max, metricDef.unit);
+    } else if (analysis.selectedLaps.length === 1) {
+      // 単独ラップ: グラデーション着色
+      const lapNum = analysis.selectedLaps[0];
+      const range = computeMetricRange(s, [lapNum], metricDef);
+      drawLapGradient(s, lapNum, metricDef, range);
+      updateLegend(range.min, range.max, metricDef.unit);
+    }
+  }
+
+  // ラップ行をフィルタ + lat/lon/value 抽出
+  function extractLapPoints(s, lapNum, col) {
+    const pts = [];
+    for (const r of s.rows) {
+      if (parseInt(r[5], 10) !== lapNum) continue;
+      const lat = parseFloat(r[1]);
+      const lon = parseFloat(r[2]);
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const rawV = r[col];
+      const v = (rawV === '' || rawV == null) ? null : parseFloat(rawV);
+      pts.push({ lat, lon, v });
+    }
+    return pts;
+  }
+
+  function computeMetricRange(s, lapNums, metricDef) {
+    let min = Infinity, max = -Infinity;
+    for (const lapNum of lapNums) {
+      const pts = extractLapPoints(s, lapNum, metricDef.col);
+      for (const p of pts) {
+        if (p.v == null || !isFinite(p.v)) continue;
+        const v = metricDef.abs ? Math.abs(p.v) : p.v;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+    if (!isFinite(min) || !isFinite(max) || min === max) {
+      return { min: 0, max: 1 };
+    }
+    return { min, max };
+  }
+
+  // 値 → 色 (0..1 を blue→cyan→green→yellow→red にマッピング)
+  function metricColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    // 5 ストップ補間
+    const stops = [
+      [0.00, [44, 127, 255]],
+      [0.25, [0, 212, 255]],
+      [0.50, [0, 255, 127]],
+      [0.75, [255, 210, 0]],
+      [1.00, [255, 61, 26]],
+    ];
+    for (let i = 0; i < stops.length - 1; i++) {
+      const [t0, c0] = stops[i];
+      const [t1, c1] = stops[i + 1];
+      if (t >= t0 && t <= t1) {
+        const k = (t - t0) / (t1 - t0);
+        const r = Math.round(c0[0] + (c1[0] - c0[0]) * k);
+        const g = Math.round(c0[1] + (c1[1] - c0[1]) * k);
+        const b = Math.round(c0[2] + (c1[2] - c0[2]) * k);
+        return `rgb(${r},${g},${b})`;
+      }
+    }
+    return 'rgb(255,255,255)';
+  }
+
+  // 単一ラップをグラデーション着色（小区間ごとに色を変える）
+  function drawLapGradient(s, lapNum, metricDef, range) {
+    const pts = extractLapPoints(s, lapNum, metricDef.col);
+    if (pts.length < 2) return;
+    const span = (range.max - range.min) || 1;
+
+    // 各セグメントを個別 polyline として追加（短いので軽い）
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      // 区間値: 平均
+      let vA = a.v, vB = b.v;
+      if (metricDef.abs) {
+        if (vA != null) vA = Math.abs(vA);
+        if (vB != null) vB = Math.abs(vB);
+      }
+      let v = null;
+      if (vA != null && vB != null) v = (vA + vB) / 2;
+      else if (vA != null) v = vA;
+      else if (vB != null) v = vB;
+
+      const color = (v == null) ? '#6a6f7c' : metricColor((v - range.min) / span);
+
+      const seg = L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+        color, weight: 4, opacity: 0.9, lineJoin: 'round', lineCap: 'round',
+      }).addTo(analysis.map);
+      analysis.layers.push(seg);
+    }
+  }
+
+  // 複数ラップ: 単色 polyline
+  function drawLapSolid(s, lapNum, color) {
+    const pts = extractLapPoints(s, lapNum, 4);
+    if (pts.length < 2) return;
+    const latlngs = pts.map(p => [p.lat, p.lon]);
+    const line = L.polyline(latlngs, {
+      color, weight: 3.5, opacity: 0.78, lineJoin: 'round',
+    }).addTo(analysis.map);
+    analysis.layers.push(line);
+  }
+
+  // ── ラップタイム一覧（選択中ラップ強調 + 色マーカー）─────
   function renderSessionLapList(s) {
     const listEl = document.getElementById('session-lap-list');
     listEl.innerHTML = '';
@@ -924,16 +1203,24 @@
       return;
     }
 
+    const isMulti = analysis.selectedLaps.length > 1;
+
     s.laps.forEach((lap, i) => {
       const isBest = (i === s.bestLapIdx);
+      const isSelected = analysis.selectedLaps.includes(lap.number);
       const splitsTxt = (lap.splits && lap.splits.length > 0)
         ? lap.splits.map(sp => formatTime(sp.splitMs)).join(' · ')
         : '';
+      const colorIdx = (lap.number - 1) % LAP_COLORS.length;
+      const colorDot = (isMulti && isSelected)
+        ? `<span class="lap-row-color" style="background:${LAP_COLORS[colorIdx]}"></span>`
+        : '';
 
       const row = document.createElement('div');
-      row.className = 'lap-row' + (isBest ? ' best' : '');
+      row.className = 'lap-row' + (isBest ? ' best' : '') +
+        ((isMulti && isSelected) ? ' selected-multi' : '');
       row.innerHTML = `
-        <div class="lap-row-num">L${lap.number}${isBest ? '<span class="badge">BEST</span>' : ''}</div>
+        <div class="lap-row-num">${colorDot}L${lap.number}${isBest ? '<span class="badge">BEST</span>' : ''}</div>
         <div class="lap-row-time">${formatTime(lap.totalMs)}</div>
         <div class="lap-row-splits">${splitsTxt}</div>
       `;
@@ -944,7 +1231,15 @@
   // History/Session: ナビゲーション
   document.getElementById('btn-open-history').addEventListener('click', openHistory);
   document.getElementById('btn-history-back').addEventListener('click', () => showScreen('home'));
-  document.getElementById('btn-session-back').addEventListener('click', () => showScreen('history'));
+  document.getElementById('btn-session-back').addEventListener('click', () => {
+    // マップリソースを解放
+    if (analysis.map) {
+      try { analysis.map.remove(); } catch (_) {}
+      analysis.map = null;
+      analysis.layers = [];
+    }
+    showScreen('history');
+  });
 
   // CSV エクスポート
   document.getElementById('btn-session-export').addEventListener('click', () => {
