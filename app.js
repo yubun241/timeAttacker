@@ -277,13 +277,15 @@
       laps.forEach((l, i) => { if (l.totalMs < bestMs) { bestMs = l.totalMs; bestLapIdx = i; } });
     }
 
-    // OBD データが入っているか確認（最後の5カラムのいずれかに値があるか）
-    const hasObdData = state.csvRows.some(r =>
-      (r[9] !== '' && r[9] != null) ||
+    // OBD データが入っているか（接続フラグ OR 行データのどちらかで判定）
+    const obdRowHasData = state.csvRows.some(r =>
+      (r[9]  !== '' && r[9]  != null) ||
       (r[10] !== '' && r[10] != null) ||
       (r[11] !== '' && r[11] != null) ||
       (r[12] !== '' && r[12] != null) ||
       (r[13] !== '' && r[13] != null));
+    // セッション中に BLE が一度でも繋がっていたら OBD 有とみなす
+    const hasObdData = state.sessionObdActive || obdRowHasData;
 
     const session = {
       id: 'sess_' + uid(),
@@ -343,6 +345,7 @@
     currentLapSplits: [],              // [{ idx, t, splitMs }]
     completedLaps: [],                 // セッション中に完走した全ラップの配列
     sessionStartTime: null,            // セッション開始 ms
+    sessionObdActive: false,           // このセッション中に OBD が接続されていたか
     sectionStartT: null,               // start of current section (for live target Δ)
     currentSectorIdx: 0,
     gateCooldown: {},                  // gateKey → last trigger time
@@ -619,6 +622,10 @@
   function bleSetStatus(s) {
     state.obd.status = s;
     state.obd.connected = (s === 'connected');
+    // 計測中に OBD が接続されたタイミングをキャプチャ
+    if (s === 'connected' && state.driveActive) {
+      state.sessionObdActive = true;
+    }
     updateBleUI();
   }
 
@@ -891,10 +898,11 @@
     { key: 'speed',    label: 'SPEED',    col: 4,  unit: 'km/h', requiresObd: false, abs: false },
     { key: 'lat_g',    label: '横G',      col: 7,  unit: 'G',    requiresObd: false, abs: true  },
     { key: 'lon_g',    label: '前後G',    col: 8,  unit: 'G',    requiresObd: false, abs: true  },
-    { key: 'rpm',      label: 'RPM',      col: 9,  unit: '',     requiresObd: true,  abs: false },
-    { key: 'throttle', label: 'THROTTLE', col: 13, unit: '%',    requiresObd: true,  abs: false },
+    { key: 'rpm',      label: '回転数',   col: 9,  unit: 'rpm',  requiresObd: true,  abs: false },
+    { key: 'throttle', label: 'スロットル', col: 13, unit: '%',  requiresObd: true,  abs: false },
     { key: 'coolant',  label: '水温',     col: 10, unit: '°C',   requiresObd: true,  abs: false },
     { key: 'oilTemp',  label: '油温',     col: 11, unit: '°C',   requiresObd: true,  abs: false },
+    { key: 'intake',   label: '吸気温度', col: 12, unit: '°C',   requiresObd: true,  abs: false },
   ];
 
   // 複数ラップ重ね合わせ時のラップ色（高コントラスト）
@@ -943,10 +951,14 @@
     obdFlag.querySelector('.summary-value').textContent = s.hasObdData ? '有' : '無';
     obdFlag.querySelector('.summary-value').style.color = s.hasObdData ? '#3fb950' : 'var(--fg-dim)';
 
-    // 初期選択: ベストラップ単独
-    analysis.selectedLaps = (s.bestLapIdx >= 0 && s.laps[s.bestLapIdx])
-      ? [s.laps[s.bestLapIdx].number]
-      : (s.laps.length > 0 ? [s.laps[0].number] : []);
+    // 初期選択: ベストラップ単独。完走ラップが無い場合は -1 = 全データを表示
+    if (s.laps.length === 0) {
+      analysis.selectedLaps = [-1];  // -1: 全データ（P2P や未完走セッション用）
+    } else {
+      analysis.selectedLaps = (s.bestLapIdx >= 0 && s.laps[s.bestLapIdx])
+        ? [s.laps[s.bestLapIdx].number]
+        : [s.laps[0].number];
+    }
 
     // OBD データ無いセッションでは初期メトリックを speed に強制
     if (!s.hasObdData && METRICS.find(m => m.key === analysis.metric)?.requiresObd) {
@@ -985,6 +997,16 @@
   function renderLapChips(s) {
     const wrap = document.getElementById('lap-chips');
     wrap.innerHTML = '';
+
+    // 完走ラップが無い場合: 「全データ」チップのみ
+    if (s.laps.length === 0) {
+      const chip = document.createElement('button');
+      chip.className = 'chip active';
+      chip.textContent = '全データ';
+      wrap.appendChild(chip);
+      return;
+    }
+
     s.laps.forEach((lap, i) => {
       const isBest = (i === s.bestLapIdx);
       const isSelected = analysis.selectedLaps.includes(lap.number);
@@ -994,11 +1016,9 @@
         (isBest ? ' lap-best' : '');
       chip.textContent = `L${lap.number}` + (isBest ? '★' : '');
       chip.addEventListener('click', () => {
-        // 複数選択トグル
         const idx = analysis.selectedLaps.indexOf(lap.number);
         if (idx >= 0) analysis.selectedLaps.splice(idx, 1);
         else          analysis.selectedLaps.push(lap.number);
-        // 必ず1つは選択
         if (analysis.selectedLaps.length === 0) analysis.selectedLaps.push(lap.number);
         renderLapChips(s);
         renderSessionLapList(s);
@@ -1096,10 +1116,12 @@
   }
 
   // ラップ行をフィルタ + lat/lon/value 抽出
+  // lapNum === -1 で「全行」を返す（P2P / 未完走セッション用）
   function extractLapPoints(s, lapNum, col) {
     const pts = [];
+    const isAll = (lapNum === -1);
     for (const r of s.rows) {
-      if (parseInt(r[5], 10) !== lapNum) continue;
+      if (!isAll && parseInt(r[5], 10) !== lapNum) continue;
       const lat = parseFloat(r[1]);
       const lon = parseFloat(r[2]);
       if (!isFinite(lat) || !isFinite(lon)) continue;
@@ -1199,7 +1221,7 @@
     listEl.innerHTML = '';
 
     if (s.laps.length === 0) {
-      listEl.innerHTML = '<div class="splits-empty" style="padding:18px;text-align:center;color:var(--fg-faint)">完走ラップなし</div>';
+      listEl.innerHTML = '<div class="splits-empty" style="padding:18px;text-align:center;color:var(--fg-faint);line-height:1.7">完走ラップなし<br><span style="font-size:11px;opacity:0.7">P2P または未完走 — マップ上に全走行データを表示中</span></div>';
       return;
     }
 
@@ -1951,6 +1973,8 @@
       state.csvRows = [];
       state.completedLaps = [];
       state.sessionStartTime = Date.now();
+      // セッション開始時に OBD が繋がっていたかを記録（途中で繋がっても updateBleUI 経由で更新される）
+      state.sessionObdActive = !!state.obd.connected;
 
       // Calibrate G-ball at START (use smoothed values for stability)
       calibrateGBall();
