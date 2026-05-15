@@ -198,6 +198,42 @@
       oiltemp:  true,
       intake:   true,
       throttle: true,
+      boost:    true,           // PID 010B (MAP) — 横画面 BOOST バー用
+    },
+    // 横画面ダッシュボード設定（GT_DASH 互換）
+    vehicle: {
+      finalDrive:  3.502,
+      tireDiamMm:  616,
+      gearRatios:  [4.459, 2.508, 1.556, 1.142, 0.851, 0.672],
+      tolerancePct: 10,
+      hysteresis:   2,
+      minSpeed:     4,
+      minRpm:       500,
+      medianSize:   5,
+    },
+    rpmCfg: {
+      maxRpm:   6200,
+      warnRpm:  4800,
+      rpmDots:  12,
+      dotConfig: [
+        { color: 'green',  threshold: 1000 },
+        { color: 'green',  threshold: 1500 },
+        { color: 'green',  threshold: 2000 },
+        { color: 'green',  threshold: 2500 },
+        { color: 'green',  threshold: 3000 },
+        { color: 'green',  threshold: 3500 },
+        { color: 'yellow', threshold: 4000 },
+        { color: 'yellow', threshold: 4300 },
+        { color: 'yellow', threshold: 4600 },
+        { color: 'red',    threshold: 5000 },
+        { color: 'red',    threshold: 5400 },
+        { color: 'red',    threshold: 5800 },
+      ],
+    },
+    boostCfg: {
+      show:    true,
+      min:     -0.5,
+      max:     2.0,
     },
   };
 
@@ -209,7 +245,10 @@
       return {
         ...DEFAULT_SETTINGS,
         ...s,
-        pids: { ...DEFAULT_SETTINGS.pids, ...(s.pids || {}) },
+        pids:     { ...DEFAULT_SETTINGS.pids,     ...(s.pids     || {}) },
+        vehicle:  { ...DEFAULT_SETTINGS.vehicle,  ...(s.vehicle  || {}) },
+        rpmCfg:   { ...DEFAULT_SETTINGS.rpmCfg,   ...(s.rpmCfg   || {}) },
+        boostCfg: { ...DEFAULT_SETTINGS.boostCfg, ...(s.boostCfg || {}) },
       };
     } catch (_) {
       return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -376,6 +415,8 @@
       oiltemp:  null,  // 油温 [°C]
       intake:   null,  // 吸気温 [°C]
       throttle: null,  // スロットル開度 [%]
+      mapKpa:   null,  // 吸気圧 [kPa] (PID 010B)
+      boost:    null,  // ブースト [kg/cm²] (mapKpa から計算)
       // BLE接続状態
       connected: false,
       lastUpdateMs: null,
@@ -385,8 +426,12 @@
       rxChar:     null,
       deviceName: null,
       deviceId:   null,
-      status:     'disconnected',  // 'disconnected' | 'scanning' | 'connecting' | 'discovering' | 'connected' | 'error'
+      status:     'disconnected',
     },
+    // ギア検出（GT_DASH 互換）
+    gear: 'N',
+    gearCand: 'N',
+    gearCnt: 0,
 
     // Wake lock
     wakeLock: null,
@@ -494,6 +539,32 @@
     document.getElementById('cb-pid-oiltemp').checked  = !!s.pids.oiltemp;
     document.getElementById('cb-pid-intake').checked   = !!s.pids.intake;
     document.getElementById('cb-pid-throttle').checked = !!s.pids.throttle;
+    document.getElementById('cb-pid-boost').checked    = !!s.pids.boost;
+
+    // 車両設定
+    const v = s.vehicle || {};
+    document.getElementById('cfg-final-drive').value = v.finalDrive || 3.502;
+    document.getElementById('cfg-tire-diam').value   = v.tireDiamMm || 616;
+    const gr = v.gearRatios || [];
+    for (let i = 1; i <= 6; i++) {
+      const el = document.getElementById('cfg-gear-' + i);
+      if (el) el.value = gr[i - 1] != null ? gr[i - 1] : '';
+    }
+    document.getElementById('cfg-gear-tol').value = v.tolerancePct || 10;
+
+    // RPM 設定
+    const rcfg = s.rpmCfg || {};
+    document.getElementById('cfg-max-rpm').value  = rcfg.maxRpm  || 6200;
+    document.getElementById('cfg-warn-rpm').value = rcfg.warnRpm || 4800;
+
+    // G 設定
+    document.getElementById('cfg-g-max').value = G_RANGE || 1.5;
+
+    // Boost 設定
+    const bcfg = s.boostCfg || {};
+    document.getElementById('cb-boost-show').checked = bcfg.show !== false;
+    document.getElementById('cfg-boost-min').value   = bcfg.min ?? -0.5;
+    document.getElementById('cfg-boost-max').value   = bcfg.max ?? 2.0;
 
     // BLE 状態を画面に反映
     if (typeof updateBleUI === 'function') updateBleUI();
@@ -515,7 +586,43 @@
       oiltemp:  document.getElementById('cb-pid-oiltemp').checked,
       intake:   document.getElementById('cb-pid-intake').checked,
       throttle: document.getElementById('cb-pid-throttle').checked,
+      boost:    document.getElementById('cb-pid-boost').checked,
     };
+
+    // 車両設定
+    const gearRatios = [];
+    for (let i = 1; i <= 6; i++) {
+      const el = document.getElementById('cfg-gear-' + i);
+      if (el && el.value !== '') {
+        const v = parseFloat(el.value);
+        if (isFinite(v)) gearRatios.push(v);
+      }
+    }
+    s.vehicle = {
+      ...(s.vehicle || {}),
+      finalDrive:   parseFloat(document.getElementById('cfg-final-drive').value) || 3.502,
+      tireDiamMm:   parseFloat(document.getElementById('cfg-tire-diam').value) || 616,
+      gearRatios:   gearRatios.length > 0 ? gearRatios : [4.459, 2.508, 1.556, 1.142, 0.851, 0.672],
+      tolerancePct: parseFloat(document.getElementById('cfg-gear-tol').value) || 10,
+    };
+
+    // RPM 設定
+    s.rpmCfg = {
+      ...(s.rpmCfg || {}),
+      maxRpm:  parseInt(document.getElementById('cfg-max-rpm').value, 10) || 6200,
+      warnRpm: parseInt(document.getElementById('cfg-warn-rpm').value, 10) || 4800,
+    };
+
+    // Boost 設定
+    s.boostCfg = {
+      ...(s.boostCfg || {}),
+      show: document.getElementById('cb-boost-show').checked,
+      min:  parseFloat(document.getElementById('cfg-boost-min').value),
+      max:  parseFloat(document.getElementById('cfg-boost-max').value),
+    };
+    if (!isFinite(s.boostCfg.min)) s.boostCfg.min = -0.5;
+    if (!isFinite(s.boostCfg.max)) s.boostCfg.max = 2.0;
+
     return s;
   }
 
@@ -545,6 +652,12 @@
     if (state.obd.connected && typeof recomputeActivePids === 'function') {
       recomputeActivePids();
     }
+    // ギアテーブル、LED バーを再構築
+    _gearTable = null;
+    buildGearTable();
+    const ledBar = document.getElementById('land-led-bar');
+    if (ledBar) ledBar.innerHTML = '';
+    buildLandscapeLedBar();
     toast('設定を保存しました');
     showScreen('home');
   });
@@ -1329,6 +1442,7 @@
     if (pids.oiltemp)  slow.add('015C');
     if (pids.intake)   slow.add('010F');
     if (pids.throttle) slow.add('0111');
+    if (pids.boost && state.settings.boostCfg?.show !== false) slow.add('010B');  // MAP
     ACTIVE_PIDS_FAST = [...fast];
     ACTIVE_PIDS_SLOW = [...slow];
     _slowIdx = 0;
@@ -1448,11 +1562,277 @@
       } else if (pid === '0111' && v.length >= 2) {
         state.obd.throttle = Math.round(parseInt(v.slice(0, 2), 16) / 255 * 100);
         return true;
+      } else if (pid === '010B' && v.length >= 2) {
+        // MAP (Manifold Absolute Pressure) [kPa] = A
+        // Boost [kg/cm²] = (MAP - 大気圧101.325) / 98.0665
+        state.obd.mapKpa = parseInt(v.slice(0, 2), 16);
+        state.obd.boost  = (state.obd.mapKpa - 101.325) / 98.0665;
+        return true;
       }
     } catch (e) {
       console.warn('[OBD PARSE]', e);
     }
     return false;
+  }
+
+  // ============================================================
+  // 横画面 DASHBOARD (GT_DASH スタイル)
+  // ============================================================
+  let _gearTable = null;     // [{gear, ratio}, ...]
+  let _ratioHistory = [];    // 中央値フィルタ用
+
+  // 端末の向きを検出して body にクラスを付与
+  function updateOrientation() {
+    const isLand = window.innerWidth > window.innerHeight;
+    document.body.classList.toggle('landscape', isLand);
+    // ギアテーブルを LandscapeUI 起動時にも構築
+    if (isLand && !_gearTable) buildGearTable();
+    // 横画面用 LED バーを生成
+    if (isLand) buildLandscapeLedBar();
+  }
+  window.addEventListener('resize', updateOrientation);
+  window.addEventListener('orientationchange', updateOrientation);
+
+  // ── ギア検出（GT_DASH 互換）─────────────────────
+  function buildGearTable() {
+    const v = state.settings.vehicle;
+    if (!v || !v.gearRatios) return;
+    const circ = Math.PI * v.tireDiamMm / 1000;   // タイヤ円周 [m]
+    // factor: ratio = factor / speed_kmh で目標の RPM が得られるよう設計
+    // RPM = speed(m/min) * finalDrive * gearRatio / circ
+    // → ratio = RPM/speed_kmh; gear ratio = ratio * (circ * 60 / 1000) / (finalDrive * gearRatio_real)
+    // 簡単化: gearTable[i] = RPM/speed when in gear i+1
+    //  speed_mpm = speed_kmh * 1000 / 60
+    //  wheel_rpm = speed_mpm / circ
+    //  engine_rpm = wheel_rpm * finalDrive * gearRatio
+    //  → engine_rpm/speed_kmh = (1000 / 60 / circ) * finalDrive * gearRatio
+    const k = (1000 / 60 / circ) * v.finalDrive;
+    _gearTable = v.gearRatios.map((g, i) => ({
+      gear: String(i + 1),
+      ratio: k * g,
+    }));
+  }
+
+  // 中央値フィルタ
+  function medianRatio(r) {
+    _ratioHistory.push(r);
+    const sz = state.settings.vehicle?.medianSize || 5;
+    if (_ratioHistory.length > sz) _ratioHistory.shift();
+    const sorted = [..._ratioHistory].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+
+  function detectGear() {
+    const rpm = state.obd.rpm;
+    const speedKmh = state.currentSpeedMS >= 0 ? state.currentSpeedMS * 3.6 : null;
+    const v = state.settings.vehicle;
+    if (!v || !_gearTable) return;
+    if (rpm == null || speedKmh == null) { state.gear = 'N'; return; }
+    if (speedKmh < (v.minSpeed || 4) || rpm < (v.minRpm || 500)) {
+      state.gear = 'N';
+      _ratioHistory = [];
+      state.gearCnt = 0;
+      return;
+    }
+    const r = medianRatio(rpm / speedKmh);
+    // 最も近いギアを探す
+    let bestG = null, bestDiff = Infinity;
+    const tol = (v.tolerancePct || 10) / 100;
+    for (const gt of _gearTable) {
+      const diff = Math.abs(r - gt.ratio) / gt.ratio;
+      if (diff < tol && diff < bestDiff) {
+        bestDiff = diff;
+        bestG = gt.gear;
+      }
+    }
+    if (!bestG) return;  // 範囲外なら現状維持
+    // ヒステリシス: 連続して同じギアが (hysteresis)回 検出されたら確定
+    if (bestG === state.gearCand) {
+      state.gearCnt++;
+      if (state.gearCnt >= (v.hysteresis || 2)) state.gear = bestG;
+    } else {
+      state.gearCand = bestG;
+      state.gearCnt = 1;
+    }
+  }
+
+  // ── RPM LED バー構築 ──────────────────────────
+  function buildLandscapeLedBar() {
+    const bar = document.getElementById('land-led-bar');
+    if (!bar) return;
+    const dotCfg = state.settings.rpmCfg?.dotConfig || [];
+    if (bar.children.length === dotCfg.length) return;  // 既に構築済
+    bar.innerHTML = '';
+    dotCfg.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'land-led ' + d.color;
+      el.dataset.threshold = String(d.threshold);
+      bar.appendChild(el);
+    });
+  }
+
+  // 各種 widget 更新
+  function updateLandscapeWidgets() {
+    if (!document.body.classList.contains('landscape')) return;
+
+    // RPM LED
+    const rpm = state.obd.rpm || 0;
+    const bar = document.getElementById('land-led-bar');
+    const rpmCfg = state.settings.rpmCfg || {};
+    if (bar) {
+      Array.from(bar.children).forEach(el => {
+        const th = parseInt(el.dataset.threshold, 10);
+        el.classList.toggle('on', rpm >= th);
+      });
+      bar.classList.toggle('warn', rpm >= (rpmCfg.warnRpm || 4800));
+    }
+
+    // BOOST バー
+    const boost = state.obd.boost;
+    const boostCfg = state.settings.boostCfg || {};
+    const bmin = boostCfg.min ?? -0.5;
+    const bmax = boostCfg.max ?? 2.0;
+    const wrap = document.getElementById('land-boost-wrap');
+    if (wrap) wrap.style.display = (boostCfg.show === false) ? 'none' : '';
+    const fill = document.getElementById('land-boost-fill');
+    if (fill) {
+      if (boost != null) {
+        const pct = Math.max(0, Math.min(100, ((boost - bmin) / (bmax - bmin)) * 100));
+        fill.style.width = pct.toFixed(1) + '%';
+      } else fill.style.width = '0%';
+    }
+    const boostNumTop = document.getElementById('land-boost-num-top');
+    if (boostNumTop) boostNumTop.textContent = boost != null ? boost.toFixed(2) : '--';
+    const boostBig = document.getElementById('land-boost-big');
+    if (boostBig) {
+      boostBig.innerHTML = (boost != null ? boost.toFixed(1) : '0.0') + '<span class="land-boost-bigunit">kg/cm²</span>';
+    }
+
+    // RPM 数値
+    const rpmEl = document.getElementById('land-rpm');
+    if (rpmEl) rpmEl.textContent = rpm > 0 ? rpm.toLocaleString('en-US') : '0';
+
+    // GEAR
+    detectGear();
+    const gearEl = document.getElementById('land-gear');
+    if (gearEl) {
+      gearEl.textContent = state.gear;
+      gearEl.className = 'land-gear-num';
+      if (state.gear === 'N') gearEl.classList.add('g-N');
+      else if (state.gear === '1') gearEl.classList.add('g-1');
+      else if (state.gear === 'R') gearEl.classList.add('g-R');
+    }
+
+    // LAP
+    const lapEl = document.getElementById('land-lap');
+    if (lapEl) lapEl.textContent = String(state.lapNumber || 0);
+
+    // SECTOR
+    const sectEl = document.getElementById('land-sector-num');
+    if (sectEl) sectEl.textContent = String((state.currentSectorIdx || 0) + 1);
+
+    // タイマー類
+    const driveTime = state.lapStarted && state.lapStartT
+      ? (Date.now() - state.lapStartT) : 0;
+    const totalEl = document.getElementById('land-total-time');
+    if (totalEl) totalEl.textContent = formatTime(driveTime);
+
+    const c = getActiveCourse();
+    // 次セクター予測（ベストラップの該当セクター時刻からの差）
+    const nsEl = document.getElementById('land-nextsec-time');
+    if (nsEl) {
+      let nsTxt = '00:00.000';
+      if (c && c.bestLap && c.bestLap.splits && c.bestLap.splits[state.currentSectorIdx]) {
+        const target = c.bestLap.splits[state.currentSectorIdx].splitMs;
+        const delta = driveTime - target;
+        nsTxt = (delta >= 0 ? '+' : '-') + formatTime(Math.abs(delta));
+      }
+      nsEl.textContent = nsTxt;
+    }
+
+    // RECORD (ベストラップ) / LATEST (直近完了ラップ)
+    const recEl = document.getElementById('land-record');
+    if (recEl) recEl.textContent = c && c.bestLap ? formatTime(c.bestLap.totalMs) : '00:00.000';
+    const latEl = document.getElementById('land-latest');
+    if (latEl) {
+      const lapList = state.completedLaps || [];
+      latEl.textContent = lapList.length > 0 ? formatTime(lapList[lapList.length - 1].totalMs) : '00:00.000';
+    }
+
+    // センサー値
+    const sp = (state.currentSpeedMS >= 0 ? Math.round(state.currentSpeedMS * 3.6) : null);
+    setText('land-speed', sp != null ? sp : '--');
+    setText('land-coolant', state.obd.coolant != null ? state.obd.coolant : '--');
+    setText('land-oil', state.obd.oiltemp != null ? state.obd.oiltemp : '--');
+
+    // OBD ステータス
+    const statEl = document.getElementById('land-obd-status');
+    if (statEl) {
+      const conn = state.obd.connected;
+      statEl.textContent = conn ? 'Connected' : '未接続';
+      statEl.classList.toggle('connected', conn);
+    }
+
+    // 状態テキスト
+    const dsEl = document.getElementById('drive-state');
+    const lsEl = document.getElementById('land-state');
+    if (dsEl && lsEl) lsEl.textContent = dsEl.textContent || '準備中';
+
+    // START/STOP ボタンのテキスト同期
+    const mainBtn = document.getElementById('btn-start-stop');
+    const landBtn = document.getElementById('land-btn-start-stop');
+    if (mainBtn && landBtn) {
+      landBtn.textContent = mainBtn.textContent;
+      landBtn.classList.toggle('stop', mainBtn.classList.contains('stop'));
+    }
+
+    // 横画面 G-ball 描画
+    if (state.gballLand) state.gballLand.draw(state.g_lat, state.g_lon);
+  }
+
+  function setText(id, v) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(v);
+  }
+
+  // 横画面のイベントハンドラ
+  function bindLandscapeHandlers() {
+    const startBtn = document.getElementById('land-btn-start-stop');
+    if (startBtn && !startBtn._bound) {
+      startBtn.addEventListener('click', () => {
+        document.getElementById('btn-start-stop').click();
+      });
+      startBtn._bound = true;
+    }
+    const zeroBtn = document.getElementById('land-btn-g-cal');
+    if (zeroBtn && !zeroBtn._bound) {
+      zeroBtn.addEventListener('click', () => calibrateGBall());
+      zeroBtn._bound = true;
+    }
+    const exitBtn = document.getElementById('land-btn-exit');
+    if (exitBtn && !exitBtn._bound) {
+      exitBtn.addEventListener('click', () => {
+        const eb = document.querySelector('[data-action="exit-drive"]');
+        if (eb) eb.click();
+      });
+      exitBtn._bound = true;
+    }
+    const cfgBtn = document.getElementById('land-btn-cfg');
+    if (cfgBtn && !cfgBtn._bound) {
+      cfgBtn.addEventListener('click', () => {
+        showScreen('settings');
+      });
+      cfgBtn._bound = true;
+    }
+  }
+
+  // GBall: 横画面用キャンバスインスタンス
+  function ensureLandscapeGBall() {
+    if (state.gballLand) return;
+    const canvas = document.getElementById('land-gball-canvas');
+    if (canvas && typeof GBall === 'function') {
+      state.gballLand = new GBall(canvas);
+    }
   }
 
   // ============================================================
@@ -2018,6 +2398,19 @@
     btn.textContent = 'START';
     btn.className = 'big-action start';
 
+    // セッション終了時に主要な表示を5秒間点滅
+    const flashIds = [
+      'drive-state', 'last-lap-time', 'current-lap-time',
+      'land-state', 'land-record', 'land-latest', 'land-current-lap',
+    ];
+    flashIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add('flash-end');
+        setTimeout(() => el.classList.remove('flash-end'), 5000);
+      }
+    });
+
     // セッションを履歴に永続化
     const c = getActiveCourse();
     persistCurrentSession(c);
@@ -2381,6 +2774,10 @@
           document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
         }
         if (state.speedGraph) state.speedGraph.draw();
+        // 横画面 widget も同フレームで更新
+        ensureLandscapeGBall();
+        bindLandscapeHandlers();
+        updateLandscapeWidgets();
       } catch (_) {
         // Skip bad render frame; do not stop RAF loop
       }
@@ -2807,6 +3204,7 @@
   // INIT
   // ============================================================
   renderHome();
+  updateOrientation();   // 起動時に向きを判定して body.landscape を設定
   // ============================================================
   // SPLASH → WARNING 自動遷移（2秒）
   // ============================================================

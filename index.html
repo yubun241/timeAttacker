@@ -87,7 +87,7 @@ so inaccuracies may occur depending on the environment.</div>
         <span class="bm-maker">藤井工藝</span>
         <span class="bm-ver">Ver.1.0</span>
       </div>
-      <button id="btn-open-history" class="icon-btn history-btn" title="履歴">↺</button>
+      <button id="btn-open-history" class="text-btn history-btn" title="走行履歴">走行履歴</button>
       <button id="btn-open-settings" class="icon-btn settings-btn" title="設定">⚙</button>
     </header>
 
@@ -197,6 +197,109 @@ so inaccuracies may occur depending on the environment.</div>
             <span class="check-desc">%</span>
           </span>
         </label>
+
+        <label class="check-row">
+          <input type="checkbox" id="cb-pid-boost" checked>
+          <span class="check-text">
+            <span class="check-name">ブースト圧 (MAP)</span>
+            <span class="check-desc">kg/cm² — 横画面ダッシュボード用</span>
+          </span>
+        </label>
+      </div>
+
+      <!-- ── 車両設定 (ギア検出用) ───────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>車両設定 (横画面ダッシュボード)</span>
+        </div>
+        <div class="num-row">
+          <label class="num-label">ファイナル ギア比</label>
+          <input type="number" id="cfg-final-drive" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">タイヤ直径 (mm)</label>
+          <input type="number" id="cfg-tire-diam" step="1" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 1速</label>
+          <input type="number" id="cfg-gear-1" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 2速</label>
+          <input type="number" id="cfg-gear-2" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 3速</label>
+          <input type="number" id="cfg-gear-3" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 4速</label>
+          <input type="number" id="cfg-gear-4" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 5速</label>
+          <input type="number" id="cfg-gear-5" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">ギア比 6速</label>
+          <input type="number" id="cfg-gear-6" step="0.001" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">許容誤差 (%)</label>
+          <input type="number" id="cfg-gear-tol" step="1" min="1" max="30" class="num-input">
+        </div>
+      </div>
+
+      <!-- ── RPM 設定 ───────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>RPM 設定</span>
+        </div>
+        <div class="num-row">
+          <label class="num-label">最大 RPM</label>
+          <input type="number" id="cfg-max-rpm" step="100" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">警告 RPM</label>
+          <input type="number" id="cfg-warn-rpm" step="100" class="num-input">
+        </div>
+      </div>
+
+      <!-- ── G 設定 ───────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>G センサー設定</span>
+        </div>
+        <div class="num-row">
+          <label class="num-label">最大 G</label>
+          <input type="number" id="cfg-g-max" step="0.1" min="0.5" max="3" class="num-input">
+        </div>
+      </div>
+
+      <!-- ── Boost 設定 ───────────────────────── -->
+      <div class="settings-section">
+        <div class="section-title">
+          <span class="dot"></span>
+          <span>Boost 設定</span>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" id="cb-boost-show" checked>
+          <span class="check-text">
+            <span class="check-name">ブースト計を表示</span>
+            <span class="check-desc">横画面のみ</span>
+          </span>
+        </label>
+        <div class="num-row">
+          <label class="num-label">最小値 (kg/cm²)</label>
+          <input type="number" id="cfg-boost-min" step="0.1" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">最大値 (kg/cm²)</label>
+          <input type="number" id="cfg-boost-max" step="0.1" class="num-input">
+        </div>
       </div>
 
       <!-- ── 接続デバイス ───────────────────────── -->
@@ -425,6 +528,9 @@ so inaccuracies may occur depending on the environment.</div>
 
     <main class="drive-main">
 
+      <!-- ─── 縦画面 (現状のレイアウト) ─── -->
+      <div class="drive-portrait-only">
+
       <button id="btn-start-stop" class="big-action start">START</button>
 
       <div class="status-grid">
@@ -481,6 +587,118 @@ so inaccuracies may occur depending on the environment.</div>
         <button id="btn-export-csv" class="btn-ghost">CSV 出力</button>
         <button id="btn-motion-perm" class="btn-ghost" style="display:none">センサー許可</button>
       </div>
+
+      </div><!-- /.drive-portrait-only -->
+
+      <!-- ═══════════════════════════════════════════════
+           横画面ダッシュボード (GT_DASH スタイル)
+           ═══════════════════════════════════════════════ -->
+      <div class="drive-landscape-only">
+
+        <!-- ブランド + RPM LED 帯 + BOOST 帯 -->
+        <div class="land-top">
+          <div class="land-brand-l">藤井工藝</div>
+          <div id="land-led-bar" class="land-led-bar"></div>
+          <div class="land-brand-r" id="land-boost-num-top">--</div>
+        </div>
+
+        <!-- BOOST 帯 -->
+        <div class="land-boost-bar-wrap" id="land-boost-wrap">
+          <div class="land-boost-label">BOOST <span class="land-boost-unit">kg/cm²</span></div>
+          <div class="land-boost-track">
+            <div class="land-boost-fill" id="land-boost-fill"></div>
+          </div>
+          <div class="land-boost-ticks">
+            <span>-0.5</span><span>0</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span>
+          </div>
+        </div>
+
+        <!-- メイングリッド -->
+        <div class="land-main">
+
+          <!-- 左カラム: SECTOR / TOTAL TIME / TO NEXT SECTOR -->
+          <div class="land-col-left">
+            <div class="land-box land-sector-box">
+              <div class="land-box-label">SECTOR</div>
+              <div class="land-sector-num" id="land-sector-num">1</div>
+            </div>
+            <div class="land-box">
+              <div class="land-box-label-sm">TOTAL TIME</div>
+              <div class="land-total-time" id="land-total-time">00:00.000</div>
+            </div>
+            <div class="land-box">
+              <div class="land-box-label-sm">TO NEXT SECTOR</div>
+              <div class="land-nextsec-time" id="land-nextsec-time">00:00.000</div>
+            </div>
+          </div>
+
+          <!-- 中央カラム: GEAR -->
+          <div class="land-col-mid">
+            <div class="land-box land-gear-box">
+              <div class="land-gear-lbl">GEAR</div>
+              <div class="land-gear-num" id="land-gear">N</div>
+            </div>
+          </div>
+
+          <!-- 右中央カラム: RPM + BOOST -->
+          <div class="land-col-rmid">
+            <div class="land-box land-rpm-box">
+              <div class="land-rpm-lbl">RPM</div>
+              <div class="land-rpm-num" id="land-rpm">0</div>
+            </div>
+            <div class="land-box land-boost-box">
+              <div class="land-boost-lbl">Boost</div>
+              <div class="land-boost-big" id="land-boost-big">0.0<span class="land-boost-bigunit">kg/cm²</span></div>
+            </div>
+          </div>
+
+          <!-- 右カラム: LAP + G -->
+          <div class="land-col-right">
+            <div class="land-tile land-lap-tile">
+              <div class="land-tile-lbl">LAP</div>
+              <div class="land-tile-num" id="land-lap">0</div>
+            </div>
+            <div class="land-tile land-g-tile">
+              <div class="land-tile-lbl">G</div>
+              <canvas id="land-gball-canvas" class="land-gball-canvas" width="240" height="240"></canvas>
+              <button id="land-btn-g-cal" class="land-zero-btn">ZERO</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下段: RECORD/LATEST + センサー + START -->
+        <div class="land-bottom">
+          <div class="land-bl-times">
+            <div class="land-time-band land-record-band">
+              <span class="land-tb-lbl">RECORD</span>
+              <span class="land-tb-val" id="land-record">00:00.000</span>
+            </div>
+            <div class="land-time-band land-latest-band">
+              <span class="land-tb-lbl">LATEST</span>
+              <span class="land-tb-val" id="land-latest">00:00.000</span>
+            </div>
+          </div>
+          <div class="land-bm-sensors">
+            <div class="land-sensor-row"><span>Speed</span><span class="land-sv"><span id="land-speed">--</span><em>km/h</em></span></div>
+            <div class="land-sensor-row"><span>Coolant temp</span><span class="land-sv"><span id="land-coolant">--</span><em>°C</em></span></div>
+            <div class="land-sensor-row"><span>Oil temp</span><span class="land-sv"><span id="land-oil">--</span><em>°C</em></span></div>
+          </div>
+          <button id="land-btn-start-stop" class="land-start-btn">START</button>
+        </div>
+
+        <!-- フッター -->
+        <footer class="land-footer">
+          <div class="land-status">
+            <span class="land-status-lbl">OBD:</span>
+            <span class="land-status-val" id="land-obd-status">未接続</span>
+          </div>
+          <div class="land-state-box" id="land-state">準備中</div>
+          <div class="land-footer-spacer"></div>
+          <button class="land-icon-btn" id="land-btn-exit" title="戻る">‹</button>
+          <button class="land-icon-btn" id="land-btn-cfg" title="設定">CFG</button>
+        </footer>
+
+      </div><!-- /.drive-landscape-only -->
 
     </main>
   </section>
