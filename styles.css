@@ -1245,13 +1245,13 @@ body.landscape .screen.active { background: #000; }
 /* LAP TIME 大きい黄色ボックス */
 .land-laptime-box {
   background: var(--accent);
-  border-radius: 8px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex: 2.4;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 16px 10px;
   overflow: hidden;
 }
 .land-laptime-val {
