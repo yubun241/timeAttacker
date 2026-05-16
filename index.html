@@ -616,7 +616,7 @@ so inaccuracies may occur depending on the environment.</div>
         <!-- メイングリッド -->
         <div class="land-main">
 
-          <!-- 左カラム: SECTOR / TOTAL TIME / TO NEXT SECTOR -->
+          <!-- 左カラム: SECTOR / TOTAL TIME -->
           <div class="land-col-left">
             <div class="land-box land-sector-box">
               <div class="land-box-label">SECTOR</div>
@@ -625,10 +625,6 @@ so inaccuracies may occur depending on the environment.</div>
             <div class="land-box">
               <div class="land-box-label-sm">TOTAL TIME</div>
               <div class="land-total-time" id="land-total-time">00:00.000</div>
-            </div>
-            <div class="land-box">
-              <div class="land-box-label-sm">TO NEXT SECTOR</div>
-              <div class="land-nextsec-time" id="land-nextsec-time">00:00.000</div>
             </div>
           </div>
 
@@ -640,28 +636,21 @@ so inaccuracies may occur depending on the environment.</div>
             </div>
           </div>
 
-          <!-- 右中央カラム: RPM + BOOST -->
-          <div class="land-col-rmid">
+          <!-- 右カラム: RPM (上, 幅広) + (Boost + LAP) -->
+          <div class="land-col-right">
             <div class="land-box land-rpm-box">
               <div class="land-rpm-lbl">RPM</div>
               <div class="land-rpm-num" id="land-rpm">0</div>
             </div>
-            <div class="land-box land-boost-box">
-              <div class="land-boost-lbl">Boost</div>
-              <div class="land-boost-big" id="land-boost-big">0.0<span class="land-boost-bigunit">kg/cm²</span></div>
-            </div>
-          </div>
-
-          <!-- 右カラム: LAP + G -->
-          <div class="land-col-right">
-            <div class="land-tile land-lap-tile">
-              <div class="land-tile-lbl">LAP</div>
-              <div class="land-tile-num" id="land-lap">0</div>
-            </div>
-            <div class="land-tile land-g-tile">
-              <div class="land-tile-lbl">G</div>
-              <canvas id="land-gball-canvas" class="land-gball-canvas" width="240" height="240"></canvas>
-              <button id="land-btn-g-cal" class="land-zero-btn">ZERO</button>
+            <div class="land-right-bottom">
+              <div class="land-box land-boost-box">
+                <div class="land-boost-lbl">Boost</div>
+                <div class="land-boost-big" id="land-boost-big">0.0<span class="land-boost-bigunit">kg/cm²</span></div>
+              </div>
+              <div class="land-box land-lap-box">
+                <div class="land-lap-lbl">LAP</div>
+                <div class="land-lap-num" id="land-lap">0</div>
+              </div>
             </div>
           </div>
         </div>

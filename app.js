@@ -1762,17 +1762,6 @@
     if (totalEl) totalEl.textContent = formatTime(driveTime);
 
     const c = getActiveCourse();
-    // 次セクター予測（ベストラップの該当セクター時刻からの差）
-    const nsEl = document.getElementById('land-nextsec-time');
-    if (nsEl) {
-      let nsTxt = '00:00.000';
-      if (c && c.bestLap && c.bestLap.splits && c.bestLap.splits[state.currentSectorIdx]) {
-        const target = c.bestLap.splits[state.currentSectorIdx].splitMs;
-        const delta = driveTime - target;
-        nsTxt = (delta >= 0 ? '+' : '-') + formatTime(Math.abs(delta));
-      }
-      nsEl.textContent = nsTxt;
-    }
 
     // RECORD (ベストラップ) / LATEST (直近完了ラップ)
     const recEl = document.getElementById('land-record');
@@ -1807,11 +1796,12 @@
     const landBtn = document.getElementById('land-btn-start-stop');
     if (mainBtn && landBtn) {
       landBtn.textContent = mainBtn.textContent;
-      landBtn.classList.toggle('stop', mainBtn.classList.contains('stop'));
+      landBtn.className = 'land-start-btn';
+      if (mainBtn.classList.contains('running')) landBtn.classList.add('running');
+      if (mainBtn.classList.contains('stop'))    landBtn.classList.add('stop');
     }
 
-    // 横画面 G-ball 描画
-    if (state.gballLand) state.gballLand.draw(state.g_lat, state.g_lon);
+    // 横画面では G ボール表示は廃止。state.g_lat/g_lon は記録用に維持
   }
 
   function setText(id, v) {
@@ -1828,11 +1818,6 @@
       });
       startBtn._bound = true;
     }
-    const zeroBtn = document.getElementById('land-btn-g-cal');
-    if (zeroBtn && !zeroBtn._bound) {
-      zeroBtn.addEventListener('click', () => calibrateGBall());
-      zeroBtn._bound = true;
-    }
     const exitBtn = document.getElementById('land-btn-exit');
     if (exitBtn && !exitBtn._bound) {
       exitBtn.addEventListener('click', () => {
@@ -1847,15 +1832,6 @@
         showScreen('settings');
       });
       cfgBtn._bound = true;
-    }
-  }
-
-  // GBall: 横画面用キャンバスインスタンス
-  function ensureLandscapeGBall() {
-    if (state.gballLand) return;
-    const canvas = document.getElementById('land-gball-canvas');
-    if (canvas && typeof GBall === 'function') {
-      state.gballLand = new GBall(canvas);
     }
   }
 
@@ -2384,8 +2360,8 @@
       calibrateGBall();
 
       const btn = document.getElementById('btn-start-stop');
-      btn.textContent = 'STOP';
-      btn.className = 'big-action stop';
+      btn.textContent = 'RUNNING';
+      btn.className = 'big-action running';
 
       setDriveState('スタート線通過待ち', 'armed');
       startGPS();
@@ -2419,8 +2395,16 @@
     stopGPS();
     releaseWakeLock();
     const btn = document.getElementById('btn-start-stop');
-    btn.textContent = 'START';
-    btn.className = 'big-action start';
+    // 一旦 STOP を表示（5秒間の点滅と共に視認）→ その後 START に戻す
+    btn.textContent = 'STOP';
+    btn.className = 'big-action stop';
+    setTimeout(() => {
+      // 5秒後にユーザーが再度走行できる状態へ
+      if (!state.driveActive) {   // 念のため二重 START 防止
+        btn.textContent = 'START';
+        btn.className = 'big-action start';
+      }
+    }, 5000);
 
     // セッション終了時に主要な表示を5秒間点滅
     const flashIds = [
@@ -2681,15 +2665,8 @@
   function handleFinishCross(crossT, c) {
     const lapMs = crossT - state.lapStartT;
     finalizeLap(lapMs, c);
-    state.lapStarted = false;
-    state.lapStartT = null;
-    state.driveActive = false;
-    setDriveState('完了', 'finished');
-    const btn = document.getElementById('btn-start-stop');
-    btn.textContent = 'START';
-    btn.className = 'big-action start';
-    stopGPS();
-    releaseWakeLock();
+    // P2P ゴール通過時は自動停止 + 履歴保存 + 5秒STOP点滅
+    finishSession();
   }
 
   function finalizeLap(lapMs, c) {
@@ -2838,7 +2815,6 @@
         }
         if (state.speedGraph) state.speedGraph.draw();
         // 横画面 widget も同フレームで更新
-        ensureLandscapeGBall();
         bindLandscapeHandlers();
         updateLandscapeWidgets();
       } catch (_) {

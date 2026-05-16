@@ -571,8 +571,10 @@ body::before {
 }
 .big-action.start { background: #00a651; color: white; }
 .big-action.start:active { background: #008541; }
-.big-action.stop  { background: #cc0000; color: white; }
-.big-action.stop:active { background: #a00000; }
+.big-action.running { background: #cc0000; color: white; }
+.big-action.running:active { background: #a00000; }
+.big-action.stop  { background: #6a6f7c; color: white; }
+.big-action.stop:active { background: #51555f; }
 
 /* Status grid */
 .status-grid {
@@ -1174,14 +1176,16 @@ body.landscape .screen.active { background: #000; }
   margin-top: 2px;
 }
 
-/* === Main grid (4 columns) === */
+/* ============================================================
+   横画面 LAYOUT — 3 columns (G を削除して RPM 横長に)
+   ============================================================ */
 .land-main {
   display: grid;
-  grid-template-columns: 1.05fr 1.4fr 1.1fr 0.85fr;
+  grid-template-columns: 0.85fr 1fr 1.65fr;   /* SECTOR | GEAR | RPM 大 */
   gap: 8px;
   min-height: 0;
 }
-.land-col-left, .land-col-rmid, .land-col-right {
+.land-col-left, .land-col-right {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1202,7 +1206,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 800;
   color: #fff;
-  font-size: clamp(16px, 2.2vw, 22px);
+  font-size: clamp(15px, 2vw, 20px);
   letter-spacing: 0.02em;
   margin-bottom: 4px;
 }
@@ -1210,7 +1214,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(12px, 1.6vw, 16px);
+  font-size: clamp(12px, 1.5vw, 16px);
   letter-spacing: 0.02em;
   margin-bottom: 2px;
 }
@@ -1223,7 +1227,7 @@ body.landscape .screen.active { background: #000; }
   font-family: var(--font-mono);
   font-style: italic;
   font-weight: 900;
-  font-size: clamp(28px, 4vw, 48px);
+  font-size: clamp(24px, 3.5vw, 42px);
   padding: 0 18px;
   border-radius: 4px;
   text-align: center;
@@ -1234,140 +1238,127 @@ body.landscape .screen.active { background: #000; }
   font-family: var(--font-mono);
   font-style: italic;
   font-weight: 900;
-  font-size: clamp(28px, 4.5vw, 48px);
+  font-size: clamp(22px, 3.5vw, 38px);
   color: var(--accent);
   letter-spacing: -0.01em;
   line-height: 1;
 }
-.land-nextsec-time {
-  font-family: var(--font-mono);
-  font-style: italic;
-  font-weight: 900;
-  font-size: clamp(28px, 4.5vw, 48px);
-  color: #22e54a;
-  letter-spacing: -0.01em;
-  line-height: 1;
-}
 
-/* GEAR */
+/* GEAR — ラベルを枠内に + 数字縮小で切れ防止 */
 .land-gear-box {
   flex: 1;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 6px 10px 10px;
   border-color: #2c2f36;
+  overflow: hidden;
 }
 .land-gear-lbl {
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(20px, 2.8vw, 30px);
+  font-size: clamp(14px, 2vw, 22px);
+  text-align: center;
+  flex-shrink: 0;
 }
 .land-gear-num {
   font-family: var(--font-mono);
   font-weight: 900;
-  font-size: clamp(120px, 22vw, 280px);
+  font-size: clamp(60px, 13vw, 150px);
   color: #fff;
   line-height: 1;
-  margin-top: -8px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 .land-gear-num.g-N { color: #4fc3f7; }
 .land-gear-num.g-1 { color: #ff8000; }
 .land-gear-num.g-R { color: #ff3d1a; }
 
-/* RPM + Boost (右中央) */
-.land-rpm-box { flex: 1; }
+/* 右カラム: RPM 大 + (Boost + LAP) */
+.land-col-right { gap: 6px; }
+.land-rpm-box {
+  flex: 1.2;
+  align-items: flex-start;          /* 左揃え */
+  text-align: left;
+  padding: 8px 18px;
+  min-height: 0;
+  overflow: hidden;
+}
 .land-rpm-lbl {
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(16px, 2.2vw, 22px);
+  font-size: clamp(16px, 2.2vw, 24px);
+  text-align: left;
 }
 .land-rpm-num {
   font-family: var(--font-mono);
   font-weight: 900;
-  font-size: clamp(40px, 6vw, 75px);
+  font-size: clamp(56px, 10vw, 120px);
   color: #fff;
   line-height: 1;
   text-align: left;
-  margin-top: -4px;
+  width: 100%;
 }
-.land-boost-box { flex: 1; min-height: 0; overflow: hidden; }
-.land-rpm-box { flex: 1; min-height: 0; overflow: hidden; }
+
+.land-right-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.land-boost-box, .land-lap-box {
+  min-height: 0;
+  overflow: hidden;
+  align-items: flex-start;
+}
 .land-boost-lbl {
   font-style: italic;
   font-weight: 700;
   color: #ff8c00;
-  font-size: clamp(16px, 2.2vw, 22px);
+  font-size: clamp(14px, 1.9vw, 20px);
 }
 .land-boost-big {
   font-family: var(--font-mono);
   font-style: italic;
   font-weight: 900;
-  font-size: clamp(32px, 5vw, 60px);
+  font-size: clamp(32px, 5.5vw, 64px);
   color: #ff8c00;
   line-height: 1;
 }
 .land-boost-bigunit {
-  font-size: 0.35em;
+  font-size: 0.32em;
   font-weight: 700;
-  margin-left: 6px;
+  margin-left: 4px;
 }
 
-/* LAP + G (右) */
-.land-col-right { gap: 8px; min-height: 0; }
-.land-tile {
+.land-lap-box {
   background: #fff;
-  border-radius: 12px;
-  padding: 6px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  border: none;
+  padding: 6px 12px;
 }
-.land-tile-lbl {
-  position: absolute;
-  top: 4px; left: 10px;
-  color: #444;
+.land-lap-lbl {
   font-style: italic;
   font-weight: 800;
-  font-size: clamp(14px, 2vw, 20px);
+  color: #444;
+  font-size: clamp(14px, 1.9vw, 20px);
 }
-.land-lap-tile .land-tile-num {
+.land-lap-num {
   font-family: var(--font-mono);
   font-weight: 900;
-  font-size: clamp(40px, 8vw, 100px);
+  font-size: clamp(40px, 7vw, 80px);
   color: #777;
   line-height: 1;
 }
-.land-gball-canvas {
-  width: 90%;
-  height: 90%;
-  max-width: 180px;
-  max-height: 180px;
-}
-.land-zero-btn {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  background: var(--accent);
-  color: #1a1300;
-  border: none;
-  font-family: var(--font-mono);
-  font-weight: 800;
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
 
-/* === Bottom row — メインと同じ4列に揃える === */
+/* === Bottom row — main grid と同じ 3 列 === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 1.05fr 1.4fr 1.1fr 0.85fr;
+  grid-template-columns: 0.85fr 1fr 1.65fr;   /* main と完全一致 */
   gap: 8px;
   align-items: stretch;
 }
@@ -1379,7 +1370,7 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
 }
 .land-bm-sensors {
-  grid-column: 2;            /* GEAR 列の真下に限定 — Boost 列とは被らない */
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1388,7 +1379,7 @@ body.landscape .screen.active { background: #000; }
   overflow: hidden;
 }
 .land-bottom > .land-start-btn {
-  grid-column: 3 / -1;       /* RPM/Boost 列から LAP/G 列までを占有 */
+  grid-column: 3;
 }
 
 .land-time-band {
@@ -1432,8 +1423,9 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
 }
 
+/* START / RUNNING / STOP の3状態 */
 .land-start-btn {
-  background: #2ec27e;
+  background: #2ec27e;        /* START: green */
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1445,7 +1437,8 @@ body.landscape .screen.active { background: #000; }
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.land-start-btn.stop { background: #ff3d1a; }
+.land-start-btn.running { background: #ff3d1a; }   /* RUNNING: red */
+.land-start-btn.stop    { background: #6a6f7c; }   /* STOP: gray */
 
 /* === Footer === */
 .land-footer {
