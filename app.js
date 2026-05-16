@@ -1582,16 +1582,40 @@
   let _ratioHistory = [];    // 中央値フィルタ用
 
   // 端末の向きを検出して body にクラスを付与
+  // TWA や Android で各種イベントの発火タイミングがバラバラなため、
+  // 複数の検出ソースを併用 + 遅延ポーリングで取りこぼし防止
   function updateOrientation() {
-    const isLand = window.innerWidth > window.innerHeight;
+    let isLand;
+    // screen.orientation を優先（TWA で最も信頼できる）
+    if (screen.orientation && typeof screen.orientation.type === 'string') {
+      isLand = screen.orientation.type.startsWith('landscape');
+    } else {
+      isLand = window.innerWidth > window.innerHeight;
+    }
     document.body.classList.toggle('landscape', isLand);
-    // ギアテーブルを LandscapeUI 起動時にも構築
     if (isLand && !_gearTable) buildGearTable();
-    // 横画面用 LED バーを生成
     if (isLand) buildLandscapeLedBar();
   }
+  // 標準イベント
   window.addEventListener('resize', updateOrientation);
   window.addEventListener('orientationchange', updateOrientation);
+  // screen.orientation API（最も新しいが TWA で確実に発火）
+  if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', updateOrientation);
+  }
+  // matchMedia（フォールバック、Android 多くで動く）
+  if (window.matchMedia) {
+    const mql = window.matchMedia('(orientation: landscape)');
+    if (mql.addEventListener) mql.addEventListener('change', updateOrientation);
+    else if (mql.addListener) mql.addListener(updateOrientation);
+  }
+  // orientationchange は viewport resize より先に発火することがあるので、
+  // 遅延を入れて確実にレイアウトが反映された後にも判定し直す
+  window.addEventListener('orientationchange', () => {
+    setTimeout(updateOrientation, 50);
+    setTimeout(updateOrientation, 250);
+    setTimeout(updateOrientation, 500);
+  });
 
   // ── ギア検出（GT_DASH 互換）─────────────────────
   function buildGearTable() {
@@ -2417,22 +2441,61 @@
   }
 
   // === GPS ===
+  let _gpsLastUpdateAt = 0;
+  let _gpsHealthTimer  = null;
+  const GPS_STALE_MS   = 8000;   // 8秒以上更新なし → 再起動
+
   function startGPS() {
     if (!navigator.geolocation) {
       toast('このブラウザはGPSをサポートしていません');
       return;
     }
+    _startGpsWatch();
+    // 停止検知タイマー: TWA で OS が GPS を一時停止することがあるため
+    if (_gpsHealthTimer) clearInterval(_gpsHealthTimer);
+    _gpsHealthTimer = setInterval(() => {
+      if (!state.driveActive) return;
+      const stale = (Date.now() - _gpsLastUpdateAt) > GPS_STALE_MS;
+      if (stale && _gpsLastUpdateAt > 0) {
+        console.warn('[GPS] stale > ' + GPS_STALE_MS + 'ms — 自動再起動');
+        _restartGpsWatch();
+      }
+    }, 3000);
+  }
+
+  function _startGpsWatch() {
+    if (state.watchId != null) return;
+    _gpsLastUpdateAt = Date.now();
     state.watchId = navigator.geolocation.watchPosition(
-      onGPSUpdate,
+      _safeGPSUpdate,
       err => {
-        toast('GPSエラー: ' + err.message);
+        console.warn('[GPS]', err.message);
         document.getElementById('gps-indicator').classList.remove('active');
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
   }
 
+  function _restartGpsWatch() {
+    if (state.watchId != null) {
+      try { navigator.geolocation.clearWatch(state.watchId); } catch (_) {}
+      state.watchId = null;
+    }
+    _startGpsWatch();
+  }
+
+  // onGPSUpdate を try-catch で包む（コールバック例外で watch が静かに止まるのを防止）
+  function _safeGPSUpdate(pos) {
+    _gpsLastUpdateAt = Date.now();
+    try {
+      onGPSUpdate(pos);
+    } catch (e) {
+      console.error('[GPS update]', e);
+    }
+  }
+
   function stopGPS() {
+    if (_gpsHealthTimer) { clearInterval(_gpsHealthTimer); _gpsHealthTimer = null; }
     if (state.watchId != null) {
       navigator.geolocation.clearWatch(state.watchId);
       state.watchId = null;
@@ -3128,24 +3191,52 @@
   });
 
   // ============================================================
-  // WAKE LOCK
+  // WAKE LOCK (TWA でも安定動作するように)
+  // 重要: WakeLock は visibilitychange で自動解放されるため、
+  //       走行中は visible に戻ったタイミングで必ず再取得する
   // ============================================================
+  let _wakeLockHeld = false;   // ユーザー意図として保持したいか
+
   async function requestWakeLock() {
-    if ('wakeLock' in navigator) {
-      try {
-        state.wakeLock = await navigator.wakeLock.request('screen');
-      } catch (e) {
-        // Silently fail; not critical
-      }
+    _wakeLockHeld = true;
+    await acquireWakeLockInternal();
+  }
+
+  async function acquireWakeLockInternal() {
+    if (!_wakeLockHeld) return;
+    if (!('wakeLock' in navigator)) return;
+    if (state.wakeLock) return;  // 既に取得済
+    try {
+      state.wakeLock = await navigator.wakeLock.request('screen');
+      // 解放イベント（OS 都合や visibility 変更で発火）
+      state.wakeLock.addEventListener('release', () => {
+        state.wakeLock = null;
+        // ユーザーが解放したのでなければ、可能なら再取得
+        if (_wakeLockHeld && document.visibilityState === 'visible') {
+          // 連続再取得を避ける軽い遅延
+          setTimeout(acquireWakeLockInternal, 500);
+        }
+      });
+    } catch (e) {
+      // 失敗してもユーザー意図は保ち、次の visibility 変更で再試行
+      state.wakeLock = null;
     }
   }
 
   function releaseWakeLock() {
+    _wakeLockHeld = false;
     if (state.wakeLock) {
       state.wakeLock.release().catch(() => {});
       state.wakeLock = null;
     }
   }
+
+  // 画面が再表示されたら WakeLock を必ず再取得
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && _wakeLockHeld) {
+      acquireWakeLockInternal();
+    }
+  });
 
   // ============================================================
   // CSV EXPORT
