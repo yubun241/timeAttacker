@@ -262,26 +262,18 @@ so inaccuracies may occur depending on the environment.</div>
           <input type="number" id="cfg-max-rpm" step="100" class="num-input">
         </div>
         <div class="num-row">
-          <label class="num-label">警告 RPM</label>
+          <label class="num-label">警告 RPM（点滅開始）</label>
           <input type="number" id="cfg-warn-rpm" step="100" class="num-input">
         </div>
         <div class="num-row">
           <label class="num-label">LED 個数</label>
-          <input type="number" id="cfg-led-count" step="1" min="6" max="20" class="num-input">
+          <input type="number" id="cfg-led-count" step="1" min="4" max="20" class="num-input">
         </div>
-        <div class="num-row">
-          <label class="num-label">🟢 緑 開始 RPM</label>
-          <input type="number" id="cfg-led-green-start" step="100" class="num-input">
-        </div>
-        <div class="num-row">
-          <label class="num-label">🟡 黄 開始 RPM</label>
-          <input type="number" id="cfg-led-yellow-start" step="100" class="num-input">
-        </div>
-        <div class="num-row">
-          <label class="num-label">🔴 赤 開始 RPM</label>
-          <input type="number" id="cfg-led-red-start" step="100" class="num-input">
-        </div>
+        <!-- 個別 LED 閾値テーブル（JS で動的生成） -->
+        <div id="led-config-table" class="led-config-table"></div>
+        <!-- プレビューバー -->
         <div id="led-preview-row" class="led-preview-row"></div>
+        <div class="led-preview-note">★ LED 個数変更 → 保存すると下段テーブルが再生成されます</div>
       </div>
 
       <!-- ── G 設定 ───────────────────────── -->

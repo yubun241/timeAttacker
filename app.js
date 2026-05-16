@@ -525,14 +525,14 @@
     showScreen('settings');
     ensureDotConfig();
     renderSettings();
-    // LED 入力の変更でリアルタイムプレビューを更新
-    ['cfg-led-count','cfg-led-green-start','cfg-led-yellow-start','cfg-led-red-start','cfg-max-rpm'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el && !el._ledPreviewBound) {
-        el.addEventListener('input', updateLedPreview);
-        el._ledPreviewBound = true;
-      }
-    });
+    renderLedConfigTable();
+    // LED 個数・最大 RPM 変更時にテーブルを再生成
+    const ledCountEl = document.getElementById('cfg-led-count');
+    if (ledCountEl && !ledCountEl._tableWired) {
+      ledCountEl.addEventListener('change', renderLedConfigTable);
+      document.getElementById('cfg-max-rpm')?.addEventListener('change', renderLedConfigTable);
+      ledCountEl._tableWired = true;
+    }
   }
 
   // 設定値を画面に反映
@@ -569,13 +569,10 @@
 
     // RPM / LED 設定
     const rcfg = s.rpmCfg || {};
-    document.getElementById('cfg-max-rpm').value        = rcfg.maxRpm        || 6200;
-    document.getElementById('cfg-warn-rpm').value       = rcfg.warnRpm       || 4800;
-    document.getElementById('cfg-led-count').value      = rcfg.rpmDots       || 12;
-    document.getElementById('cfg-led-green-start').value  = rcfg.ledGreenStart  || 1000;
-    document.getElementById('cfg-led-yellow-start').value = rcfg.ledYellowStart || 4000;
-    document.getElementById('cfg-led-red-start').value    = rcfg.ledRedStart    || 5000;
-    updateLedPreview();
+    document.getElementById('cfg-max-rpm').value   = rcfg.maxRpm  || 6200;
+    document.getElementById('cfg-warn-rpm').value  = rcfg.warnRpm || 4800;
+    document.getElementById('cfg-led-count').value = rcfg.rpmDots || 12;
+    // LED テーブルは openSettings で renderLedConfigTable() が呼ぶ
 
     // G 設定
     document.getElementById('cfg-g-max').value = G_RANGE || 1.5;
@@ -627,18 +624,15 @@
     };
 
     // RPM / LED 設定
-    const maxRpm        = parseInt(document.getElementById('cfg-max-rpm').value, 10)        || 6200;
-    const warnRpm       = parseInt(document.getElementById('cfg-warn-rpm').value, 10)       || 4800;
-    const ledCount      = parseInt(document.getElementById('cfg-led-count').value, 10)      || 12;
-    const ledGreenStart = parseInt(document.getElementById('cfg-led-green-start').value, 10)  || 1000;
-    const ledYellowStart= parseInt(document.getElementById('cfg-led-yellow-start').value, 10) || 4000;
-    const ledRedStart   = parseInt(document.getElementById('cfg-led-red-start').value, 10)    || 5000;
+    const maxRpm  = parseInt(document.getElementById('cfg-max-rpm').value, 10)  || 6200;
+    const warnRpm = parseInt(document.getElementById('cfg-warn-rpm').value, 10) || 4800;
+    const ledCount= parseInt(document.getElementById('cfg-led-count').value, 10) || 12;
+    const dotConfig = collectLedDotConfig();
     s.rpmCfg = {
       ...(s.rpmCfg || {}),
       maxRpm, warnRpm,
-      rpmDots:      ledCount,
-      ledGreenStart, ledYellowStart, ledRedStart,
-      dotConfig: buildLedDotConfig(ledCount, ledGreenStart, ledYellowStart, ledRedStart, maxRpm),
+      rpmDots: dotConfig.length || ledCount,
+      dotConfig,
     };
 
     // Boost 設定
@@ -1855,32 +1849,104 @@
   // 横画面のイベントハンドラ（init 時に一度だけバインド。tick に依存しない）
   function bindLandscapeHandlers() { /* 後方互換で残す（tick から呼ばれていても無害） */ }
 
-  // LED プレビュー更新（設定画面でリアルタイムに点灯イメージを表示）
-  function updateLedPreview() {
-    const preview = document.getElementById('led-preview-row');
-    if (!preview) return;
-    const count       = parseInt(document.getElementById('cfg-led-count')?.value, 10) || 12;
-    const greenStart  = parseInt(document.getElementById('cfg-led-green-start')?.value, 10) || 1000;
-    const yellowStart = parseInt(document.getElementById('cfg-led-yellow-start')?.value, 10) || 4000;
-    const redStart    = parseInt(document.getElementById('cfg-led-red-start')?.value, 10) || 5000;
-    const maxRpm      = parseInt(document.getElementById('cfg-max-rpm')?.value, 10) || 6200;
-    const dots = buildLedDotConfig(count, greenStart, yellowStart, redStart, maxRpm);
-    preview.innerHTML = dots.map(d =>
-      `<div class="led-preview-dot ${d.color}" title="${d.threshold} RPM"></div>`
-    ).join('');
-  }
-
   // dotConfig が空なら自動生成（初回起動互換）
   function ensureDotConfig() {
     const s = state.settings;
     if (!s.rpmCfg.dotConfig || s.rpmCfg.dotConfig.length === 0) {
       const r = s.rpmCfg;
-      s.rpmCfg.dotConfig = buildLedDotConfig(
-        r.rpmDots || 12, r.ledGreenStart || 1000,
-        r.ledYellowStart || 4000, r.ledRedStart || 5000, r.maxRpm || 6200
-      );
+      const n = r.rpmDots || 12;
+      const max = r.maxRpm || 6200;
+      const step = (max - 1000) / Math.max(n - 1, 1);
+      s.rpmCfg.dotConfig = Array.from({ length: n }, (_, i) => {
+        const thresh = Math.round(1000 + step * i);
+        const ratio  = thresh / max;
+        return {
+          threshold: thresh,
+          color: ratio > 0.85 ? 'red' : ratio > 0.65 ? 'yellow' : 'green',
+        };
+      });
       saveSettings(s);
     }
+  }
+
+  // 設定画面の LED テーブルを動的生成
+  function renderLedConfigTable() {
+    const table = document.getElementById('led-config-table');
+    if (!table) return;
+    const count  = parseInt(document.getElementById('cfg-led-count')?.value, 10) || 12;
+    const existing = (state.settings.rpmCfg.dotConfig || []);
+    // 既存設定を保持しつつ、必要に応じて自動補完
+    const maxRpm = parseInt(document.getElementById('cfg-max-rpm')?.value, 10) || 6200;
+    const step   = (maxRpm - 1000) / Math.max(count - 1, 1);
+    const dots   = Array.from({ length: count }, (_, i) => {
+      if (existing[i]) return existing[i];
+      const thresh = Math.round(1000 + step * i);
+      const ratio  = thresh / maxRpm;
+      return { threshold: thresh, color: ratio > 0.85 ? 'red' : ratio > 0.65 ? 'yellow' : 'green' };
+    });
+
+    table.innerHTML = '';
+    dots.forEach((d, i) => {
+      const row = document.createElement('div');
+      row.className = 'led-config-row';
+      row.dataset.idx = String(i);
+      row.innerHTML = `
+        <div class="led-config-num ${d.color}">${i + 1}</div>
+        <div class="led-thresh-wrap">
+          <input type="number" class="led-thresh-input num-input" value="${d.threshold}" step="100" min="0" max="20000">
+          <span>RPM</span>
+        </div>
+        <div class="led-color-sel">
+          <label class="led-color-opt">
+            <input type="radio" name="lc${i}" value="green" ${d.color==='green'?'checked':''}>
+            <span class="led-dot-lbl green"></span>
+          </label>
+          <label class="led-color-opt">
+            <input type="radio" name="lc${i}" value="yellow" ${d.color==='yellow'?'checked':''}>
+            <span class="led-dot-lbl yellow"></span>
+          </label>
+          <label class="led-color-opt">
+            <input type="radio" name="lc${i}" value="red" ${d.color==='red'?'checked':''}>
+            <span class="led-dot-lbl red"></span>
+          </label>
+        </div>`;
+
+      // 閾値 or 色変更 → 番号バッジ色更新 + プレビュー更新
+      row.addEventListener('change', () => {
+        const sel = row.querySelector(`input[name="lc${i}"]:checked`)?.value || 'green';
+        row.querySelector('.led-config-num').className = `led-config-num ${sel}`;
+        updateLedPreview();
+      });
+      row.querySelector('.led-thresh-input').addEventListener('input', updateLedPreview);
+      table.appendChild(row);
+    });
+    updateLedPreview();
+  }
+
+  // フォームから dotConfig を収集
+  function collectLedDotConfig() {
+    const rows = document.querySelectorAll('#led-config-table .led-config-row');
+    const dots = [];
+    rows.forEach((row, i) => {
+      const thresh = parseInt(row.querySelector('.led-thresh-input').value, 10) || 0;
+      const color  = row.querySelector(`input[name="lc${i}"]:checked`)?.value || 'green';
+      dots.push({ threshold: thresh, color });
+    });
+    return dots;
+  }
+
+  // LED プレビューバーを更新
+  function updateLedPreview() {
+    const preview = document.getElementById('led-preview-row');
+    if (!preview) return;
+    const rows  = document.querySelectorAll('#led-config-table .led-config-row');
+    let   html  = '';
+    rows.forEach((row, i) => {
+      const color = row.querySelector(`input[name="lc${i}"]:checked`)?.value || 'green';
+      const thresh = row.querySelector('.led-thresh-input')?.value || '?';
+      html += `<div class="led-preview-dot ${color}" title="${thresh} RPM"></div>`;
+    });
+    preview.innerHTML = html;
   }
 
   // ─ init 時に直接バインド ─────────────────────────────

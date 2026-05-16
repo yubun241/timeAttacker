@@ -1181,7 +1181,7 @@ body.landscape .screen.active { background: #000; }
    ============================================================ */
 .land-main {
   display: grid;
-  grid-template-columns: 0.85fr 1fr 1.65fr;   /* SECTOR | GEAR | RPM 大 */
+  grid-template-columns: 1.15fr 1fr 1.35fr;   /* 左を広げてタイム文字が崩れないように */
   gap: 8px;
   min-height: 0;
 }
@@ -1251,16 +1251,20 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 1.5;
   min-height: 0;
-  padding: 4px 10px;
+  padding: 4px 8px;
+  overflow: hidden;
 }
 .land-laptime-val {
-  font-family: var(--font-mono);
+  /* IBM Plex Mono が未ロードでも崩れないよう Android 標準モノスペースを優先 */
+  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
   font-style: italic;
-  font-weight: 900;
-  font-size: clamp(28px, 5.5vw, 62px);
+  font-weight: 700;
+  font-size: clamp(20px, 4.2vw, 52px);
   color: #1a1300;
   text-align: center;
   line-height: 1;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
 }
 
 /* To Next SECTOR */
@@ -1280,16 +1284,19 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 1;
   min-height: 0;
-  padding: 3px 10px;
+  padding: 3px 8px;
+  overflow: hidden;
 }
 .land-nextsec-val {
-  font-family: var(--font-mono);
+  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
   font-style: italic;
-  font-weight: 900;
-  font-size: clamp(24px, 4.5vw, 52px);
+  font-weight: 700;
+  font-size: clamp(18px, 3.5vw, 42px);
   color: var(--accent);
   text-align: center;
   line-height: 1;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
 }
 
 /* RECORD / LATEST bands */
@@ -1356,7 +1363,7 @@ body.landscape .screen.active { background: #000; }
 .land-rpm-box {
   flex: 1.2;
   align-items: stretch;
-  padding: 8px 18px;
+  padding: 8px 16px;
   min-height: 0;
   overflow: hidden;
 }
@@ -1364,17 +1371,22 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(16px, 2.2vw, 24px);
+  font-size: clamp(14px, 1.9vw, 22px);
   text-align: left;                  /* ラベルのみ左揃え */
+  flex-shrink: 0;
 }
 .land-rpm-num {
-  font-family: var(--font-mono);
+  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
   font-weight: 900;
-  font-size: clamp(56px, 10vw, 120px);
+  font-size: clamp(44px, 8vw, 100px);
   color: #fff;
   line-height: 1;
-  text-align: right;                 /* 数値は右揃え */
+  text-align: right;
   width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .land-right-bottom {
@@ -1433,7 +1445,94 @@ body.landscape .screen.active { background: #000; }
   width: 100%;
 }
 
-/* LED プレビュー（設定画面） */
+/* LED 個別設定テーブル */
+.led-config-table {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.led-config-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 10px;
+  border-bottom: 1px dotted var(--border);
+}
+.led-config-row:last-child { border-bottom: none; }
+.led-config-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-elev);
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+.led-config-num.green  { background: rgba(34, 229, 74, 0.15); color: #22e54a; }
+.led-config-num.yellow { background: rgba(255, 210, 0, 0.15);  color: #ffd200; }
+.led-config-num.red    { background: rgba(255, 61, 26, 0.15);  color: #ff3d1a; }
+.led-thresh-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.led-thresh-wrap span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+.led-thresh-input {
+  width: 80px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: right;
+}
+.led-thresh-input:focus { outline: none; border-color: var(--accent); }
+.led-color-sel {
+  display: flex;
+  gap: 4px;
+}
+.led-color-opt {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.led-color-opt input[type="radio"] { display: none; }
+.led-color-opt input[type="radio"]:checked + .led-dot-lbl {
+  opacity: 1;
+  transform: scale(1.2);
+}
+.led-color-opt:has(input:checked) {
+  border-color: var(--fg-faint);
+  background: rgba(255,255,255,0.04);
+}
+.led-dot-lbl {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  opacity: 0.4;
+  transition: all 0.1s;
+}
+.led-dot-lbl.green  { background: #22e54a; }
+.led-dot-lbl.yellow { background: #ffd200; }
+.led-dot-lbl.red    { background: #ff3d1a; }
+
+/* LED プレビュー */
 .led-preview-row {
   display: flex;
   gap: 6px;
@@ -1441,8 +1540,7 @@ body.landscape .screen.active { background: #000; }
   padding: 10px 4px 4px;
 }
 .led-preview-dot {
-  width: 18px;
-  height: 18px;
+  width: 18px; height: 18px;
   border-radius: 50%;
   background: #1a1a1a;
   border: 1px solid #2a2a2a;
@@ -1450,11 +1548,16 @@ body.landscape .screen.active { background: #000; }
 .led-preview-dot.green  { background: #1aa01a; border-color: #22e54a; }
 .led-preview-dot.yellow { background: #d4a300; border-color: #ffd200; }
 .led-preview-dot.red    { background: #b81a06; border-color: #ff3d1a; }
+.led-preview-note {
+  font-size: 11px;
+  color: var(--fg-faint);
+  padding: 2px 4px 8px;
+}
 
 /* === Bottom row — main grid と同じ 3 列 === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 0.85fr 1fr 1.65fr;   /* main と完全一致 */
+  grid-template-columns: 1.15fr 1fr 1.35fr;   /* main と完全一致 */
   gap: 8px;
   align-items: stretch;
 }
