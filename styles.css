@@ -1275,7 +1275,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #aaa;
-  font-size: clamp(20px, 1.8vw, 18px);
+  font-size: clamp(18px, 1.8vw, 18px);
   flex-shrink: 0;
   padding: 0 2px;
 }
@@ -1295,7 +1295,7 @@ body.landscape .screen.active { background: #000; }
   font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   font-style: normal;
   font-weight: 800;
-  font-size: clamp(28px, 6vw, 78px);
+  font-size: clamp(18px, 6vw, 78px);
   color: var(--accent);
   text-align: center;
   line-height: 1;
@@ -1308,7 +1308,7 @@ body.landscape .screen.active { background: #000; }
 /* RECORD / LATEST bands */
 .land-time-band {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 40px 1fr;
   align-items: center;
   background: var(--accent);
   border-radius: 4px;
