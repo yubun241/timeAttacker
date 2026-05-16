@@ -1249,22 +1249,24 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 2.2;                   /* より縦に大きく */
+  flex: 2.4;
   min-height: 0;
-  padding: 6px 8px;
+  padding: 8px 10px;
   overflow: hidden;
 }
 .land-laptime-val {
-  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
-  font-style: italic;
-  font-weight: 700;
-  font-size: clamp(32px, 7vw, 88px);   /* 大幅拡大 */
+  /* italic + 大きいフォントが Android で数字を歪める → normal に変更。
+     tabular-nums で桁幅を固定してレイアウトが跳ねないようにする */
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  font-size: clamp(34px, 7.5vw, 96px);
   color: #1a1300;
   text-align: center;
   line-height: 1;
   white-space: nowrap;
   letter-spacing: 0;
-  font-variant-numeric: tabular-nums;  /* 桁ごとに同じ幅で重なり防止 */
+  font-variant-numeric: tabular-nums;
   width: 100%;
 }
 
@@ -1284,22 +1286,22 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1.6;                   /* より縦に大きく */
+  flex: 1.8;
   min-height: 0;
   padding: 6px 8px;
   overflow: hidden;
 }
 .land-nextsec-val {
-  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
-  font-style: italic;
-  font-weight: 700;
-  font-size: clamp(28px, 6vw, 72px);   /* 大幅拡大 */
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  font-size: clamp(28px, 6vw, 78px);
   color: var(--accent);
   text-align: center;
   line-height: 1;
   white-space: nowrap;
   letter-spacing: 0;
-  font-variant-numeric: tabular-nums;  /* 桁ごとに同じ幅で重なり防止 */
+  font-variant-numeric: tabular-nums;
   width: 100%;
 }
 
@@ -1321,12 +1323,13 @@ body.landscape .screen.active { background: #000; }
   padding-left: 8px;
 }
 .land-tb-val {
-  font-family: var(--font-mono);
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-weight: 700;
-  font-size: clamp(14px, 2.2vw, 20px);
+  font-size: clamp(14px, 2.2vw, 22px);
   text-align: right;
   padding-right: 10px;
   color: #3a2a00;
+  font-variant-numeric: tabular-nums;
 }
 
 /* GEAR — ラベルを枠内に + 数字縮小で切れ防止 */
@@ -1376,13 +1379,13 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
   color: #fff;
   font-size: clamp(14px, 1.9vw, 22px);
-  text-align: left;                  /* ラベルのみ左揃え */
+  text-align: left;
   flex-shrink: 0;
 }
 .land-rpm-num {
-  font-family: 'Roboto Mono', 'Droid Sans Mono', 'Courier New', monospace;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-weight: 900;
-  font-size: clamp(44px, 8vw, 100px);
+  font-size: clamp(44px, 8.5vw, 108px);
   color: #fff;
   line-height: 1;
   text-align: right;
@@ -1391,6 +1394,7 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
 }
 
 .land-right-bottom {
@@ -1412,12 +1416,13 @@ body.landscape .screen.active { background: #000; }
   font-size: clamp(14px, 1.9vw, 20px);
 }
 .land-boost-big {
-  font-family: var(--font-mono);
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-style: italic;
   font-weight: 900;
   font-size: clamp(32px, 5.5vw, 64px);
   color: #ff8c00;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .land-boost-bigunit {
   font-size: 0.32em;
@@ -1440,13 +1445,14 @@ body.landscape .screen.active { background: #000; }
   width: 100%;
 }
 .land-lap-num {
-  font-family: var(--font-mono);
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-weight: 900;
   font-size: clamp(40px, 7vw, 80px);
   color: #777;
   line-height: 1;
-  text-align: center;               /* 数値は中央 */
+  text-align: center;
   width: 100%;
+  font-variant-numeric: tabular-nums;
 }
 
 /* LED 個別設定テーブル */
