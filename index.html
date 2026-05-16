@@ -255,7 +255,7 @@ so inaccuracies may occur depending on the environment.</div>
       <div class="settings-section">
         <div class="section-title">
           <span class="dot"></span>
-          <span>RPM 設定</span>
+          <span>RPM / LED 設定</span>
         </div>
         <div class="num-row">
           <label class="num-label">最大 RPM</label>
@@ -265,6 +265,23 @@ so inaccuracies may occur depending on the environment.</div>
           <label class="num-label">警告 RPM</label>
           <input type="number" id="cfg-warn-rpm" step="100" class="num-input">
         </div>
+        <div class="num-row">
+          <label class="num-label">LED 個数</label>
+          <input type="number" id="cfg-led-count" step="1" min="6" max="20" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">🟢 緑 開始 RPM</label>
+          <input type="number" id="cfg-led-green-start" step="100" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">🟡 黄 開始 RPM</label>
+          <input type="number" id="cfg-led-yellow-start" step="100" class="num-input">
+        </div>
+        <div class="num-row">
+          <label class="num-label">🔴 赤 開始 RPM</label>
+          <input type="number" id="cfg-led-red-start" step="100" class="num-input">
+        </div>
+        <div id="led-preview-row" class="led-preview-row"></div>
       </div>
 
       <!-- ── G 設定 ───────────────────────── -->
@@ -616,16 +633,36 @@ so inaccuracies may occur depending on the environment.</div>
         <!-- メイングリッド -->
         <div class="land-main">
 
-          <!-- 左カラム: SECTOR / TOTAL TIME -->
+          <!-- 左カラム: SECTOR / LAP TIME / NEXT SECTOR / RECORD / LATEST -->
           <div class="land-col-left">
-            <div class="land-box land-sector-box">
-              <div class="land-box-label">SECTOR</div>
-              <div class="land-sector-num" id="land-sector-num">1</div>
+
+            <!-- SECTOR header (大きい白文字) -->
+            <div class="land-sector-head">
+              <span class="land-sector-lbl-txt">SECTOR</span>
+              <span class="land-sector-num-txt" id="land-sector-num">1</span>
             </div>
-            <div class="land-box">
-              <div class="land-box-label-sm">TOTAL TIME</div>
-              <div class="land-total-time" id="land-total-time">00:00.000</div>
+
+            <!-- LAP TIME 大黄色ボックス -->
+            <div class="land-laptime-box">
+              <div class="land-laptime-val" id="land-total-time">00:00.000</div>
             </div>
+
+            <!-- To Next SECTOR -->
+            <div class="land-nextsec-head-lbl">To Next SECTOR</div>
+            <div class="land-nextsec-box">
+              <div class="land-nextsec-val" id="land-nextsec-time">00:00.000</div>
+            </div>
+
+            <!-- RECORD / LATEST -->
+            <div class="land-time-band land-record-band">
+              <span class="land-tb-lbl">RECORD</span>
+              <span class="land-tb-val" id="land-record">00:00.000</span>
+            </div>
+            <div class="land-time-band land-latest-band">
+              <span class="land-tb-lbl">LATEST</span>
+              <span class="land-tb-val" id="land-latest">00:00.000</span>
+            </div>
+
           </div>
 
           <!-- 中央カラム: GEAR -->
@@ -655,18 +692,10 @@ so inaccuracies may occur depending on the environment.</div>
           </div>
         </div>
 
-        <!-- 下段: RECORD/LATEST + センサー + START -->
+        <!-- 下段: センサー + START (RECORD/LATEST は左カラム内) -->
         <div class="land-bottom">
-          <div class="land-bl-times">
-            <div class="land-time-band land-record-band">
-              <span class="land-tb-lbl">RECORD</span>
-              <span class="land-tb-val" id="land-record">00:00.000</span>
-            </div>
-            <div class="land-time-band land-latest-band">
-              <span class="land-tb-lbl">LATEST</span>
-              <span class="land-tb-val" id="land-latest">00:00.000</span>
-            </div>
-          </div>
+          <!-- col 1: 空（RECORD/LATEST は上段左カラムに移動） -->
+          <div></div>
           <div class="land-bm-sensors">
             <div class="land-sensor-row"><span>Speed</span><span class="land-sv"><span id="land-speed">--</span><em>km/h</em></span></div>
             <div class="land-sensor-row"><span>Coolant temp</span><span class="land-sv"><span id="land-coolant">--</span><em>°C</em></span></div>

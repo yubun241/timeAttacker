@@ -1219,29 +1219,103 @@ body.landscape .screen.active { background: #000; }
   margin-bottom: 2px;
 }
 
-/* SECTOR */
-.land-sector-box { flex-shrink: 0; }
-.land-sector-num {
-  background: var(--accent);
-  color: #1a1300;
-  font-family: var(--font-mono);
-  font-style: italic;
-  font-weight: 900;
-  font-size: clamp(24px, 3.5vw, 42px);
-  padding: 0 18px;
-  border-radius: 4px;
-  text-align: center;
-  line-height: 1.1;
+/* === Left column (SECTOR / LAP TIME / NEXT SECTOR / RECORD / LATEST) === */
+.land-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
 }
 
-.land-total-time {
+/* SECTOR header */
+.land-sector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.land-sector-lbl-txt,
+.land-sector-num-txt {
+  font-style: italic;
+  font-weight: 900;
+  color: #fff;
+  font-size: clamp(22px, 4.2vw, 46px);
+}
+
+/* LAP TIME 大きい黄色ボックス */
+.land-laptime-box {
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1.5;
+  min-height: 0;
+  padding: 4px 10px;
+}
+.land-laptime-val {
   font-family: var(--font-mono);
   font-style: italic;
   font-weight: 900;
-  font-size: clamp(22px, 3.5vw, 38px);
-  color: var(--accent);
-  letter-spacing: -0.01em;
+  font-size: clamp(28px, 5.5vw, 62px);
+  color: #1a1300;
+  text-align: center;
   line-height: 1;
+}
+
+/* To Next SECTOR */
+.land-nextsec-head-lbl {
+  font-style: italic;
+  font-weight: 700;
+  color: #aaa;
+  font-size: clamp(13px, 1.8vw, 18px);
+  flex-shrink: 0;
+}
+.land-nextsec-box {
+  background: #000;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  padding: 3px 10px;
+}
+.land-nextsec-val {
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-weight: 900;
+  font-size: clamp(24px, 4.5vw, 52px);
+  color: var(--accent);
+  text-align: center;
+  line-height: 1;
+}
+
+/* RECORD / LATEST bands */
+.land-time-band {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  background: var(--accent);
+  border-radius: 4px;
+  color: #1a1300;
+  font-style: italic;
+  padding: 3px 0;
+  flex-shrink: 0;
+}
+.land-tb-lbl {
+  font-weight: 800;
+  font-size: clamp(11px, 1.7vw, 16px);
+  padding-left: 8px;
+}
+.land-tb-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(14px, 2.2vw, 20px);
+  text-align: right;
+  padding-right: 10px;
+  color: #3a2a00;
 }
 
 /* GEAR — ラベルを枠内に + 数字縮小で切れ防止 */
@@ -1281,8 +1355,7 @@ body.landscape .screen.active { background: #000; }
 .land-col-right { gap: 6px; }
 .land-rpm-box {
   flex: 1.2;
-  align-items: flex-end;            /* 右揃え */
-  text-align: right;
+  align-items: stretch;
   padding: 8px 18px;
   min-height: 0;
   overflow: hidden;
@@ -1292,8 +1365,7 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
   color: #fff;
   font-size: clamp(16px, 2.2vw, 24px);
-  text-align: right;
-  width: 100%;
+  text-align: left;                  /* ラベルのみ左揃え */
 }
 .land-rpm-num {
   font-family: var(--font-mono);
@@ -1301,7 +1373,7 @@ body.landscape .screen.active { background: #000; }
   font-size: clamp(56px, 10vw, 120px);
   color: #fff;
   line-height: 1;
-  text-align: right;
+  text-align: right;                 /* 数値は右揃え */
   width: 100%;
 }
 
@@ -1341,7 +1413,7 @@ body.landscape .screen.active { background: #000; }
   background: #fff;
   border: none;
   padding: 6px 12px;
-  align-items: flex-start;          /* 左揃え */
+  align-items: flex-start;
 }
 .land-lap-lbl {
   font-style: italic;
@@ -1357,9 +1429,27 @@ body.landscape .screen.active { background: #000; }
   font-size: clamp(40px, 7vw, 80px);
   color: #777;
   line-height: 1;
-  text-align: left;
+  text-align: center;               /* 数値は中央 */
   width: 100%;
 }
+
+/* LED プレビュー（設定画面） */
+.led-preview-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 4px 4px;
+}
+.led-preview-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+}
+.led-preview-dot.green  { background: #1aa01a; border-color: #22e54a; }
+.led-preview-dot.yellow { background: #d4a300; border-color: #ffd200; }
+.led-preview-dot.red    { background: #b81a06; border-color: #ff3d1a; }
 
 /* === Bottom row — main grid と同じ 3 列 === */
 .land-bottom {

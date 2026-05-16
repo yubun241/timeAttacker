@@ -189,6 +189,22 @@
   // ============================================================
   // SETTINGS (Phase 0: UI + 永続化のみ。Phase 1 で BLE 接続が読み取って利用)
   // ============================================================
+  // LED dotConfig を自動生成（色区分 RPM で等間隔配置）
+  function buildLedDotConfig(count, greenStart, yellowStart, redStart, maxRpm) {
+    count = Math.max(6, Math.min(20, Math.round(count)));
+    const step = (maxRpm - greenStart) / Math.max(count - 1, 1);
+    const dots = [];
+    for (let i = 0; i < count; i++) {
+      const thresh = Math.round(greenStart + step * i);
+      let color;
+      if      (thresh >= redStart)    color = 'red';
+      else if (thresh >= yellowStart) color = 'yellow';
+      else                            color = 'green';
+      dots.push({ color, threshold: thresh });
+    }
+    return dots;
+  }
+
   const DEFAULT_SETTINGS = {
     obdMode: 'double',          // 'single' | 'double'
     obdAutoReconnect: 'on',     // 'on' | 'off'
@@ -212,23 +228,13 @@
       medianSize:   5,
     },
     rpmCfg: {
-      maxRpm:   6200,
-      warnRpm:  4800,
-      rpmDots:  12,
-      dotConfig: [
-        { color: 'green',  threshold: 1000 },
-        { color: 'green',  threshold: 1500 },
-        { color: 'green',  threshold: 2000 },
-        { color: 'green',  threshold: 2500 },
-        { color: 'green',  threshold: 3000 },
-        { color: 'green',  threshold: 3500 },
-        { color: 'yellow', threshold: 4000 },
-        { color: 'yellow', threshold: 4300 },
-        { color: 'yellow', threshold: 4600 },
-        { color: 'red',    threshold: 5000 },
-        { color: 'red',    threshold: 5400 },
-        { color: 'red',    threshold: 5800 },
-      ],
+      maxRpm:        6200,
+      warnRpm:       4800,
+      rpmDots:       12,
+      ledGreenStart: 1000,
+      ledYellowStart:4000,
+      ledRedStart:   5000,
+      dotConfig: [],   // buildLedDotConfig で自動生成
     },
     boostCfg: {
       show:    true,
@@ -517,7 +523,16 @@
   // ============================================================
   function openSettings() {
     showScreen('settings');
+    ensureDotConfig();
     renderSettings();
+    // LED 入力の変更でリアルタイムプレビューを更新
+    ['cfg-led-count','cfg-led-green-start','cfg-led-yellow-start','cfg-led-red-start','cfg-max-rpm'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el._ledPreviewBound) {
+        el.addEventListener('input', updateLedPreview);
+        el._ledPreviewBound = true;
+      }
+    });
   }
 
   // 設定値を画面に反映
@@ -552,10 +567,15 @@
     }
     document.getElementById('cfg-gear-tol').value = v.tolerancePct || 10;
 
-    // RPM 設定
+    // RPM / LED 設定
     const rcfg = s.rpmCfg || {};
-    document.getElementById('cfg-max-rpm').value  = rcfg.maxRpm  || 6200;
-    document.getElementById('cfg-warn-rpm').value = rcfg.warnRpm || 4800;
+    document.getElementById('cfg-max-rpm').value        = rcfg.maxRpm        || 6200;
+    document.getElementById('cfg-warn-rpm').value       = rcfg.warnRpm       || 4800;
+    document.getElementById('cfg-led-count').value      = rcfg.rpmDots       || 12;
+    document.getElementById('cfg-led-green-start').value  = rcfg.ledGreenStart  || 1000;
+    document.getElementById('cfg-led-yellow-start').value = rcfg.ledYellowStart || 4000;
+    document.getElementById('cfg-led-red-start').value    = rcfg.ledRedStart    || 5000;
+    updateLedPreview();
 
     // G 設定
     document.getElementById('cfg-g-max').value = G_RANGE || 1.5;
@@ -606,11 +626,19 @@
       tolerancePct: parseFloat(document.getElementById('cfg-gear-tol').value) || 10,
     };
 
-    // RPM 設定
+    // RPM / LED 設定
+    const maxRpm        = parseInt(document.getElementById('cfg-max-rpm').value, 10)        || 6200;
+    const warnRpm       = parseInt(document.getElementById('cfg-warn-rpm').value, 10)       || 4800;
+    const ledCount      = parseInt(document.getElementById('cfg-led-count').value, 10)      || 12;
+    const ledGreenStart = parseInt(document.getElementById('cfg-led-green-start').value, 10)  || 1000;
+    const ledYellowStart= parseInt(document.getElementById('cfg-led-yellow-start').value, 10) || 4000;
+    const ledRedStart   = parseInt(document.getElementById('cfg-led-red-start').value, 10)    || 5000;
     s.rpmCfg = {
       ...(s.rpmCfg || {}),
-      maxRpm:  parseInt(document.getElementById('cfg-max-rpm').value, 10) || 6200,
-      warnRpm: parseInt(document.getElementById('cfg-warn-rpm').value, 10) || 4800,
+      maxRpm, warnRpm,
+      rpmDots:      ledCount,
+      ledGreenStart, ledYellowStart, ledRedStart,
+      dotConfig: buildLedDotConfig(ledCount, ledGreenStart, ledYellowStart, ledRedStart, maxRpm),
     };
 
     // Boost 設定
@@ -1726,7 +1754,7 @@
       } else fill.style.width = '0%';
     }
     const boostNumTop = document.getElementById('land-boost-num-top');
-    if (boostNumTop) boostNumTop.textContent = boost != null ? boost.toFixed(2) : '--';
+    if (boostNumTop) boostNumTop.textContent = boost != null ? boost.toFixed(1) : '--';
     const boostBig = document.getElementById('land-boost-big');
     if (boostBig) {
       boostBig.innerHTML = (boost != null ? boost.toFixed(1) : '0.0') + '<span class="land-boost-bigunit">kg/cm²</span>';
@@ -1762,6 +1790,21 @@
     if (totalEl) totalEl.textContent = formatTime(driveTime);
 
     const c = getActiveCourse();
+
+    // To Next SECTOR 差分（ベストラップの現セクター目標との差）
+    const nsEl = document.getElementById('land-nextsec-time');
+    if (nsEl) {
+      let nsTxt = '00:00.000';
+      if (c && c.bestLap && state.lapStarted) {
+        const splits = c.bestLap.splits;
+        if (splits && splits[state.currentSectorIdx]) {
+          const target = splits[state.currentSectorIdx].splitMs;
+          const delta  = driveTime - target;
+          nsTxt = (delta >= 0 ? '+' : '-') + formatTime(Math.abs(delta));
+        }
+      }
+      nsEl.textContent = nsTxt;
+    }
 
     // RECORD (ベストラップ) / LATEST (直近完了ラップ)
     const recEl = document.getElementById('land-record');
@@ -1809,31 +1852,57 @@
     if (el) el.textContent = String(v);
   }
 
-  // 横画面のイベントハンドラ
-  function bindLandscapeHandlers() {
-    const startBtn = document.getElementById('land-btn-start-stop');
-    if (startBtn && !startBtn._bound) {
-      startBtn.addEventListener('click', () => {
+  // 横画面のイベントハンドラ（init 時に一度だけバインド。tick に依存しない）
+  function bindLandscapeHandlers() { /* 後方互換で残す（tick から呼ばれていても無害） */ }
+
+  // LED プレビュー更新（設定画面でリアルタイムに点灯イメージを表示）
+  function updateLedPreview() {
+    const preview = document.getElementById('led-preview-row');
+    if (!preview) return;
+    const count       = parseInt(document.getElementById('cfg-led-count')?.value, 10) || 12;
+    const greenStart  = parseInt(document.getElementById('cfg-led-green-start')?.value, 10) || 1000;
+    const yellowStart = parseInt(document.getElementById('cfg-led-yellow-start')?.value, 10) || 4000;
+    const redStart    = parseInt(document.getElementById('cfg-led-red-start')?.value, 10) || 5000;
+    const maxRpm      = parseInt(document.getElementById('cfg-max-rpm')?.value, 10) || 6200;
+    const dots = buildLedDotConfig(count, greenStart, yellowStart, redStart, maxRpm);
+    preview.innerHTML = dots.map(d =>
+      `<div class="led-preview-dot ${d.color}" title="${d.threshold} RPM"></div>`
+    ).join('');
+  }
+
+  // dotConfig が空なら自動生成（初回起動互換）
+  function ensureDotConfig() {
+    const s = state.settings;
+    if (!s.rpmCfg.dotConfig || s.rpmCfg.dotConfig.length === 0) {
+      const r = s.rpmCfg;
+      s.rpmCfg.dotConfig = buildLedDotConfig(
+        r.rpmDots || 12, r.ledGreenStart || 1000,
+        r.ledYellowStart || 4000, r.ledRedStart || 5000, r.maxRpm || 6200
+      );
+      saveSettings(s);
+    }
+  }
+
+  // ─ init 時に直接バインド ─────────────────────────────
+  (function initLandscapeButtons() {
+    const landStart = document.getElementById('land-btn-start-stop');
+    if (landStart) {
+      landStart.addEventListener('click', () => {
         document.getElementById('btn-start-stop').click();
       });
-      startBtn._bound = true;
     }
-    const exitBtn = document.getElementById('land-btn-exit');
-    if (exitBtn && !exitBtn._bound) {
-      exitBtn.addEventListener('click', () => {
+    const landExit = document.getElementById('land-btn-exit');
+    if (landExit) {
+      landExit.addEventListener('click', () => {
         const eb = document.querySelector('[data-action="exit-drive"]');
         if (eb) eb.click();
       });
-      exitBtn._bound = true;
     }
-    const cfgBtn = document.getElementById('land-btn-cfg');
-    if (cfgBtn && !cfgBtn._bound) {
-      cfgBtn.addEventListener('click', () => {
-        showScreen('settings');
-      });
-      cfgBtn._bound = true;
+    const landCfg = document.getElementById('land-btn-cfg');
+    if (landCfg) {
+      landCfg.addEventListener('click', () => showScreen('settings'));
     }
-  }
+  })();
 
   // ============================================================
   // 接続安定化 (Phase 3)
@@ -3272,6 +3341,7 @@
   // ============================================================
   renderHome();
   updateOrientation();   // 起動時に向きを判定して body.landscape を設定
+  ensureDotConfig();     // dotConfig が空なら自動生成
   // ============================================================
   // SPLASH → WARNING 自動遷移（2秒）
   // ============================================================
