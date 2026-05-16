@@ -1239,7 +1239,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(18px, 4.2vw, 46px);
+  font-size: clamp(15px, 4.2vw, 46px);
 }
 
 /* LAP TIME 大きい黄色ボックス */
