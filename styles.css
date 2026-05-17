@@ -1197,7 +1197,7 @@ body.landscape .screen.active { background: #000; }
   background: #000;
   border: 1.5px solid #2c2f36;
   border-radius: 10px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1206,7 +1206,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 800;
   color: #fff;
-  font-size: clamp(15px, 2vw, 20px);
+  font-size: clamp(8px, 2vw, 20px);
   letter-spacing: 0.02em;
   margin-bottom: 4px;
 }
@@ -1214,7 +1214,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(12px, 1.5vw, 16px);
+  font-size: clamp(8px, 1.5vw, 16px);
   letter-spacing: 0.02em;
   margin-bottom: 2px;
 }
@@ -1239,7 +1239,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(12px, 4.2vw, 46px);
+  font-size: clamp(14px, 4.2vw, 46px);
 }
 
 /* LAP TIME 大きい黄色ボックス */
