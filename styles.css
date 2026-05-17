@@ -1288,7 +1288,7 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 1.8;
   min-height: 0;
-  padding: 6px 8px;
+  padding: 20px 8px;
   overflow: hidden;
 }
 .land-nextsec-val {
