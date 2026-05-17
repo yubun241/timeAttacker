@@ -616,11 +616,11 @@ body::before {
 
 /* to-NEXT-SECTOR */
 .next-sector {
-  background: var(--bg-elev);
+  /* background: var(--bg-elev);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: 4px;
-  padding: 10px 14px;
+  padding: 10px 14px;*/
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -635,7 +635,7 @@ body::before {
 .ns-value {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 22px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
