@@ -673,7 +673,7 @@ body::before {
   border-radius: 4px 4px 0 0;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-bottom: none;
+  /* border-bottom: none;*/
 }
 .ns-bar-label {
   font-family: var(--font-mono);
@@ -1252,7 +1252,7 @@ body.landscape .screen.active { background: #000; }
   flex: 2.4;
   min-height: 0;
   padding: 24px 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 .land-laptime-val {
   /* italic + 大きいフォントが Android で数字を歪める → normal に変更。
