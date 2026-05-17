@@ -707,11 +707,33 @@
   function bleSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   // ATコマンド送信
+  // BLE 送信キュー — 複数の write が競合しないよう 1 件ずつ順番に処理
+  let _sendQueue = [];
+  let _sendBusy  = false;
+
+  async function _drainSendQueue() {
+    if (_sendBusy) return;
+    _sendBusy = true;
+    while (_sendQueue.length > 0) {
+      const cmd = _sendQueue.shift();
+      if (!state.obd.txChar) break;
+      try {
+        await state.obd.txChar.writeValueWithoutResponse(
+          new TextEncoder().encode(cmd + '\r')
+        );
+      } catch (e) {
+        console.warn('[BLE SEND]', e);
+      }
+      // ELM327 が次コマンドを受け付けるまでの最短インターバル
+      await bleSleep(20);
+    }
+    _sendBusy = false;
+  }
+
   function bleSend(cmd) {
     if (!state.obd.txChar) return;
-    state.obd.txChar.writeValueWithoutResponse(
-      new TextEncoder().encode(cmd + '\r')
-    ).catch(e => console.warn('[BLE SEND]', e));
+    _sendQueue.push(cmd);
+    _drainSendQueue();
   }
 
   // 接続状態の UI 更新（設定画面 + Drive 画面のインジケータ）
@@ -937,18 +959,17 @@
 
       // 通知受信 → PID 応答パースへ
       await rxChar.startNotifications();
-      // 重複登録防止
-      if (!rxChar._taListenerAttached) {
-        rxChar.addEventListener('characteristicvaluechanged', bleOnData);
-        rxChar._taListenerAttached = true;
-      }
+      // 旧リスナーを必ず削除してから再登録（再接続時の二重登録防止）
+      rxChar.removeEventListener('characteristicvaluechanged', bleOnData);
+      rxChar.addEventListener('characteristicvaluechanged', bleOnData);
 
-      // ELM327 初期化シーケンス
+      // ELM327 初期化シーケンス（待機時間を長めに確保）
+      _sendQueue = []; _sendBusy = false;   // 送信キューをリセット
       await bleSleep(500);
-      bleSend('ATZ'); await bleSleep(1600);
+      bleSend('ATZ'); await bleSleep(2000); // リセット完了まで余裕を持って待機
       for (const cmd of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATST FF', 'ATSP0']) {
         bleSend(cmd);
-        await bleSleep(400);
+        await bleSleep(500);               // 400ms → 500ms（安価なELM327でも確実に処理）
       }
 
       bleSetStatus('connected');
@@ -1522,6 +1543,7 @@
     pollState.active  = false;
     pollState.buf     = '';
     pollState.waiting = false;
+    _sendQueue = []; _sendBusy = false;    // 送信キューもクリア
     if (_pollTimer)    { clearInterval(_pollTimer);    _pollTimer = null; }
     if (_timeoutTimer) { clearTimeout(_timeoutTimer);  _timeoutTimer = null; }
   }
@@ -2000,6 +2022,8 @@
     if (_keepAliveTimer) clearInterval(_keepAliveTimer);
     _keepAliveTimer = setInterval(() => {
       if (!state.obd.connected || !state.obd.txChar) return;
+      // ポーリング応答待ち中は絶対に割り込まない
+      if (pollState.waiting) return;
       // 'AT I' = ELM327 識別情報。無害で応答が返るため接続維持に最適
       bleSend('AT I');
     }, KEEPALIVE_MS);
