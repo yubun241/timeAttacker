@@ -685,7 +685,7 @@ body::before {
 .ns-bar-num {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 28px;
+  font-size: 12px;
   color: var(--fg);
   line-height: 1;
 }
@@ -1308,7 +1308,7 @@ body.landscape .screen.active { background: #000; }
 /* RECORD / LATEST bands */
 .land-time-band {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 45px 1fr;
   align-items: center;
   background: var(--accent);
   border-radius: 4px;
