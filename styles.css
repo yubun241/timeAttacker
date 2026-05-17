@@ -1177,11 +1177,12 @@ body.landscape .screen.active { background: #000; }
 }
 
 /* ============================================================
-   横画面 LAYOUT — 3 columns (G を削除して RPM 横長に)
+   横画面 LAYOUT — 3 columns
+   ★修正: 中央列を縮小、右列を拡大(左カラムは維持)
    ============================================================ */
 .land-main {
   display: grid;
-  grid-template-columns: 1.15fr 1fr 1.35fr;   /* 左を広げてタイム文字が崩れないように */
+  grid-template-columns: 1.15fr 0.7fr 1.65fr;   /* ← 中央 1fr→0.7fr / 右 1.35fr→1.65fr */
   gap: 8px;
   min-height: 0;
 }
@@ -1227,19 +1228,22 @@ body.landscape .screen.active { background: #000; }
   min-height: 0;
 }
 
-/* SECTOR header */
+/* SECTOR header
+   ★修正: ToNEXT SECTOR ラベルと同等スケールに統一
+   旧: clamp(15px, 4.2vw, 46px) → 新: clamp(14px, 1.8vw, 22px) */
 .land-sector-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  padding: 0 2px;
 }
 .land-sector-lbl-txt,
 .land-sector-num-txt {
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(15px, 4.2vw, 46px);
+  font-size: clamp(14px, 1.8vw, 22px);
 }
 
 /* LAP TIME 大きい黄色ボックス */
@@ -1275,7 +1279,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #aaa;
-  font-size: clamp(18px, 1.8vw, 18px);
+  font-size: clamp(14px, 1.8vw, 18px);
   flex-shrink: 0;
   padding: 0 2px;
 }
@@ -1564,10 +1568,11 @@ body.landscape .screen.active { background: #000; }
   padding: 2px 4px 8px;
 }
 
-/* === Bottom row — main grid と同じ 3 列 === */
+/* === Bottom row — main grid と同じ 3 列
+   ★修正: main と完全一致(1.15fr 0.7fr 1.65fr) === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 1.15fr 1fr 1.35fr;   /* main と完全一致 */
+  grid-template-columns: 1.15fr 0.7fr 1.65fr;   /* main と完全一致 */
   gap: 8px;
   align-items: stretch;
 }
@@ -1589,6 +1594,10 @@ body.landscape .screen.active { background: #000; }
 }
 .land-bottom > .land-start-btn {
   grid-column: 3;
+  /* ★修正: 左辺は RPM/Boost 左端に揃え、右辺は Boost 右端に揃える
+     → 結果として Boost ボックスの真下に同幅で配置される */
+  justify-self: start;
+  width: calc(50% - 3px);   /* 6px gap を考慮した Boost と同幅 */
 }
 
 .land-time-band {
