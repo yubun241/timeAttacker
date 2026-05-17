@@ -616,22 +616,19 @@ body::before {
 
 /* to-NEXT-SECTOR */
 .next-sector {
-  /* background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: 4px;
-  padding: 10px 14px;*/
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .ns-label {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.2em;
+  font-size: 8px;
+  letter-spacing: 0.1em;
   color: var(--fg-dim);
   text-transform: uppercase;
 }
+
 .ns-value {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -639,9 +636,14 @@ body::before {
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
-.ns-value.faster { color: var(--green); }
-.ns-value.slower { color: var(--red); }
 
+.ns-value.faster {
+  color: var(--green);
+}
+
+.ns-value.slower {
+  color: var(--red);
+}
 /* BEST delta */
 .best-delta {
   background: var(--bg-elev);
