@@ -1243,6 +1243,7 @@ body.landscape .screen.active { background: #000; }
 }
 
 /* LAP TIME 大きい黄色ボックス */
+/* LAP TIME 大きい黄色ボックス */
 .land-laptime-box {
   background: var(--accent);
   border-radius: 8px;
@@ -1250,9 +1251,10 @@ body.landscape .screen.active { background: #000; }
   align-items: center;
   justify-content: center;
   flex: 2.4;
-  min-height: 0;
   padding: 24px 10px;
   overflow: visible;
+  position: relative;
+  z-index: 1;
 }
 .land-laptime-val {
   /* italic + 大きいフォントが Android で数字を歪める → normal に変更。
