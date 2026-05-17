@@ -1,9 +1,5 @@
 /* ============================================================
-   TIME ATTACKER  Ver.1.0.1  (藤井工藝)
-   Landscape Layout 修正版:
-     ① SECTOR header をボックス化(ToNEXT と同サイズ)
-     ② RECORD / LATEST バンドの右端を縮め、Speed 行との重なり解消
-     ③ START ボタンを Boost の幅に揃え、左辺を RPM/Boost と一致
+   TIME ATTACKER  Ver.1.0  (藤井工藝)
    ============================================================ */
 
 :root {
@@ -616,34 +612,32 @@ body::before {
 
 /* to-NEXT-SECTOR */
 .next-sector {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-
 .ns-label {
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.1em;
+  font-size: 10px;
+  letter-spacing: 0.2em;
   color: var(--fg-dim);
   text-transform: uppercase;
 }
-
 .ns-value {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
+.ns-value.faster { color: var(--green); }
+.ns-value.slower { color: var(--red); }
 
-.ns-value.faster {
-  color: var(--green);
-}
-
-.ns-value.slower {
-  color: var(--red);
-}
 /* BEST delta */
 .best-delta {
   background: var(--bg-elev);
@@ -691,7 +685,7 @@ body::before {
 .ns-bar-num {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 28px;
   color: var(--fg);
   line-height: 1;
 }
@@ -1233,30 +1227,19 @@ body.landscape .screen.active { background: #000; }
   min-height: 0;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   [Ver.1.0.1 修正①] SECTOR header をボックス化
-   ToNEXT SECTOR ボックス (.land-nextsec-box) と同サイズに揃える
-   ───────────────────────────────────────────────────────────── */
+/* SECTOR header */
 .land-sector-head {
-  background: #000;
-  border: 2px solid var(--accent);
-  border-radius: 6px;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  flex: 1.8;                  /* = .land-nextsec-box と同じ */
-  min-height: 0;
-  padding: 24px 8px;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 .land-sector-lbl-txt,
 .land-sector-num-txt {
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(18px, 6vw, 78px);   /* = ToNEXT と同サイズ */
-  line-height: 1;
+  font-size: clamp(22px, 4.2vw, 46px);
 }
 
 /* LAP TIME 大きい黄色ボックス */
@@ -1268,7 +1251,7 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 2.4;
   min-height: 0;
-  padding: 36px 10px;
+  padding: 8px 10px;
   overflow: hidden;
 }
 .land-laptime-val {
@@ -1277,7 +1260,7 @@ body.landscape .screen.active { background: #000; }
   font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   font-style: normal;
   font-weight: 800;
-  font-size: clamp(32px, 7.5vw, 96px);
+  font-size: clamp(34px, 7.5vw, 96px);
   color: #1a1300;
   text-align: center;
   line-height: 1;
@@ -1292,7 +1275,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #aaa;
-  font-size: clamp(18px, 1.8vw, 18px);
+  font-size: clamp(13px, 1.8vw, 18px);
   flex-shrink: 0;
   padding: 0 2px;
 }
@@ -1305,14 +1288,14 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 1.8;
   min-height: 0;
-  padding: 24px 8px;
+  padding: 6px 8px;
   overflow: hidden;
 }
 .land-nextsec-val {
   font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   font-style: normal;
   font-weight: 800;
-  font-size: clamp(18px, 6vw, 78px);
+  font-size: clamp(28px, 6vw, 78px);
   color: var(--accent);
   text-align: center;
   line-height: 1;
@@ -1325,7 +1308,7 @@ body.landscape .screen.active { background: #000; }
 /* RECORD / LATEST bands */
 .land-time-band {
   display: grid;
-  grid-template-columns: 40px 1fr;
+  grid-template-columns: 70px 1fr;
   align-items: center;
   background: var(--accent);
   border-radius: 4px;
@@ -1588,24 +1571,13 @@ body.landscape .screen.active { background: #000; }
   gap: 8px;
   align-items: stretch;
 }
-
-/* ─────────────────────────────────────────────────────────────
-   [Ver.1.0.1 修正②] RECORD / LATEST を左基点で右端を縮める
-   Speed 等のセンサ行 (.land-bm-sensors) との重なりを解消
-   ───────────────────────────────────────────────────────────── */
 .land-bl-times {
   grid-column: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
   justify-content: center;
-  align-items: flex-start;
 }
-.land-bl-times .land-time-band {
-  width: 82%;
-  max-width: 100%;
-}
-
 .land-bm-sensors {
   grid-column: 2;
   display: flex;
@@ -1660,11 +1632,7 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   [Ver.1.0.1 修正③] START / RUNNING / STOP 3状態ボタン
-   左辺を RPM/Boost の左辺と一致させ、Boost ボックスの幅に揃える
-   (land-right-bottom: gap 6px / 1fr 1fr → 半分 = calc(50% - 3px))
-   ───────────────────────────────────────────────────────────── */
+/* START / RUNNING / STOP の3状態 */
 .land-start-btn {
   background: #2ec27e;        /* START: green */
   color: #fff;
@@ -1677,9 +1645,6 @@ body.landscape .screen.active { background: #000; }
   letter-spacing: 0.04em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  justify-self: start;
-  width: calc(50% - 3px);
-  min-width: 0;
 }
 .land-start-btn.running { background: #ff3d1a; }   /* RUNNING: red */
 .land-start-btn.stop    { background: #6a6f7c; }   /* STOP: gray */
