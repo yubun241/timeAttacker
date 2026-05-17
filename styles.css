@@ -1251,7 +1251,7 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 2.4;
   padding: 24px 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 .land-laptime-val {
   /* italic + 大きいフォントが Android で数字を歪める → normal に変更。
