@@ -694,7 +694,7 @@ body::before {
 .big-timer {
   background: var(--accent);
   color: #1a1300;
-  border-radius: 0 0 4px 4px;
+  border-radius: 4px;
   padding: 14px;
   text-align: center;
   margin-top: -1px;
