@@ -1,5 +1,9 @@
 /* ============================================================
-   TIME ATTACKER  Ver.1.0  (藤井工藝)
+   TIME ATTACKER  Ver.1.0.1  (藤井工藝)
+   Landscape Layout 修正版:
+     ① SECTOR header をボックス化(ToNEXT と同サイズ)
+     ② RECORD / LATEST バンドの右端を縮め、Speed 行との重なり解消
+     ③ START ボタンを Boost の幅に揃え、左辺を RPM/Boost と一致
    ============================================================ */
 
 :root {
@@ -1177,12 +1181,11 @@ body.landscape .screen.active { background: #000; }
 }
 
 /* ============================================================
-   横画面 LAYOUT — 3 columns
-   ★修正: 中央列を縮小、右列を拡大(左カラムは維持)
+   横画面 LAYOUT — 3 columns (G を削除して RPM 横長に)
    ============================================================ */
 .land-main {
   display: grid;
-  grid-template-columns: 1.15fr 0.7fr 1.65fr;   /* ← 中央 1fr→0.7fr / 右 1.35fr→1.65fr */
+  grid-template-columns: 1.15fr 1fr 1.35fr;   /* 左を広げてタイム文字が崩れないように */
   gap: 8px;
   min-height: 0;
 }
@@ -1228,22 +1231,30 @@ body.landscape .screen.active { background: #000; }
   min-height: 0;
 }
 
-/* SECTOR header
-   ★修正: ToNEXT SECTOR ラベルと同等スケールに統一
-   旧: clamp(15px, 4.2vw, 46px) → 新: clamp(14px, 1.8vw, 22px) */
+/* ─────────────────────────────────────────────────────────────
+   [Ver.1.0.1 修正①] SECTOR header をボックス化
+   ToNEXT SECTOR ボックス (.land-nextsec-box) と同サイズに揃える
+   ───────────────────────────────────────────────────────────── */
 .land-sector-head {
+  background: #000;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
-  padding: 0 2px;
+  justify-content: center;
+  gap: 16px;
+  flex: 1.8;                  /* = .land-nextsec-box と同じ */
+  min-height: 0;
+  padding: 24px 8px;
+  overflow: hidden;
 }
 .land-sector-lbl-txt,
 .land-sector-num-txt {
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(14px, 1.8vw, 22px);
+  font-size: clamp(18px, 6vw, 78px);   /* = ToNEXT と同サイズ */
+  line-height: 1;
 }
 
 /* LAP TIME 大きい黄色ボックス */
@@ -1279,7 +1290,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #aaa;
-  font-size: clamp(14px, 1.8vw, 18px);
+  font-size: clamp(18px, 1.8vw, 18px);
   flex-shrink: 0;
   padding: 0 2px;
 }
@@ -1568,21 +1579,31 @@ body.landscape .screen.active { background: #000; }
   padding: 2px 4px 8px;
 }
 
-/* === Bottom row — main grid と同じ 3 列
-   ★修正: main と完全一致(1.15fr 0.7fr 1.65fr) === */
+/* === Bottom row — main grid と同じ 3 列 === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 1.15fr 0.7fr 1.65fr;   /* main と完全一致 */
+  grid-template-columns: 1.15fr 1fr 1.35fr;   /* main と完全一致 */
   gap: 8px;
   align-items: stretch;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   [Ver.1.0.1 修正②] RECORD / LATEST を左基点で右端を縮める
+   Speed 等のセンサ行 (.land-bm-sensors) との重なりを解消
+   ───────────────────────────────────────────────────────────── */
 .land-bl-times {
   grid-column: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
   justify-content: center;
+  align-items: flex-start;
 }
+.land-bl-times .land-time-band {
+  width: 82%;
+  max-width: 100%;
+}
+
 .land-bm-sensors {
   grid-column: 2;
   display: flex;
@@ -1594,10 +1615,6 @@ body.landscape .screen.active { background: #000; }
 }
 .land-bottom > .land-start-btn {
   grid-column: 3;
-  /* ★修正: 左辺は RPM/Boost 左端に揃え、右辺は Boost 右端に揃える
-     → 結果として Boost ボックスの真下に同幅で配置される */
-  justify-self: start;
-  width: calc(50% - 3px);   /* 6px gap を考慮した Boost と同幅 */
 }
 
 .land-time-band {
@@ -1641,7 +1658,11 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
 }
 
-/* START / RUNNING / STOP の3状態 */
+/* ─────────────────────────────────────────────────────────────
+   [Ver.1.0.1 修正③] START / RUNNING / STOP 3状態ボタン
+   左辺を RPM/Boost の左辺と一致させ、Boost ボックスの幅に揃える
+   (land-right-bottom: gap 6px / 1fr 1fr → 半分 = calc(50% - 3px))
+   ───────────────────────────────────────────────────────────── */
 .land-start-btn {
   background: #2ec27e;        /* START: green */
   color: #fff;
@@ -1654,6 +1675,9 @@ body.landscape .screen.active { background: #000; }
   letter-spacing: 0.04em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  justify-self: start;
+  width: calc(50% - 3px);
+  min-width: 0;
 }
 .land-start-btn.running { background: #ff3d1a; }   /* RUNNING: red */
 .land-start-btn.stop    { background: #6a6f7c; }   /* STOP: gray */
