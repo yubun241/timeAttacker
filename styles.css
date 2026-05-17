@@ -1582,9 +1582,10 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
   overflow: hidden;
+  padding: 6px 10px;
 }
 .land-bottom > .land-start-btn {
   grid-column: 3;
@@ -1613,22 +1614,42 @@ body.landscape .screen.active { background: #000; }
   padding-right: 12px;
 }
 
+/* ── Coolant / Oil temp 行（テーマ統合版） ──
+   - 緑を排除し、ラベル=--fg-dim / 値=--fg
+   - 2行構成で中央列に収める
+   - 細い区切り線で RPM/Boost と同階層の情報帯として整列
+*/
 .land-bm-sensors .land-sensor-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  color: #22e54a;
-  font-style: italic;
-  font-weight: 700;
-  font-size: clamp(14px, 2vw, 20px);
   align-items: baseline;
   white-space: nowrap;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.land-bm-sensors .land-sv { font-family: var(--font-mono); }
-.land-bm-sensors .land-sv em {
-  font-style: italic;
-  font-size: 0.6em;
-  margin-left: 4px;
+.land-bm-sensors .land-sensor-row:last-child {
+  border-bottom: none;
+}
+.land-bm-sensors .land-sr-lbl {
+  color: var(--fg-dim);
+  font-weight: 600;
+  font-size: clamp(12px, 1.55vw, 16px);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.land-bm-sensors .land-sv {
+  font-family: var(--font-mono);
+  color: var(--fg);
   font-weight: 700;
+  font-size: clamp(18px, 2.6vw, 26px);
+  letter-spacing: 0.02em;
+}
+.land-bm-sensors .land-sv em {
+  font-style: normal;
+  font-size: 0.55em;
+  margin-left: 5px;
+  font-weight: 500;
+  color: var(--fg-dim);
 }
 
 /* START / RUNNING / STOP の3状態 */
