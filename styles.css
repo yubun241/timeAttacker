@@ -1243,7 +1243,6 @@ body.landscape .screen.active { background: #000; }
 }
 
 /* LAP TIME 大きい黄色ボックス */
-/* LAP TIME 大きい黄色ボックス */
 .land-laptime-box {
   background: var(--accent);
   border-radius: 8px;
@@ -1253,7 +1252,6 @@ body.landscape .screen.active { background: #000; }
   flex: 2.4;
   padding: 24px 10px;
   overflow: visible;
-  margin-top: 4px;
 }
 .land-laptime-val {
   /* italic + 大きいフォントが Android で数字を歪める → normal に変更。
@@ -1407,7 +1405,7 @@ body.landscape .screen.active { background: #000; }
 }
 .land-boost-box, .land-lap-box {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   align-items: flex-start;
 }
 .land-boost-lbl {
