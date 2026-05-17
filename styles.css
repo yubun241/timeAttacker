@@ -689,7 +689,7 @@ body::before {
 .ns-bar-num {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 28px;
+  font-size: 20px;
   color: var(--fg);
   line-height: 1;
 }
