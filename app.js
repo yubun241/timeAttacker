@@ -2498,6 +2498,13 @@
       btn.textContent = 'RUNNING';
       btn.className = 'big-action running';
 
+      // 横画面ボタンも即時同期
+      const landBtn = document.getElementById('land-btn-start-stop');
+      if (landBtn) {
+        landBtn.textContent = 'RUNNING';
+        landBtn.className = 'land-start-btn running';
+      }
+
       setDriveState('スタート線通過待ち', 'armed');
       startGPS();
       requestWakeLock();
@@ -2530,14 +2537,23 @@
     stopGPS();
     releaseWakeLock();
     const btn = document.getElementById('btn-start-stop');
+    const landBtn = document.getElementById('land-btn-start-stop');
     // 一旦 STOP を表示（5秒間の点滅と共に視認）→ その後 START に戻す
     btn.textContent = 'STOP';
     btn.className = 'big-action stop';
+    if (landBtn) {
+      landBtn.textContent = 'STOP';
+      landBtn.className = 'land-start-btn stop';
+    }
     setTimeout(() => {
       // 5秒後にユーザーが再度走行できる状態へ
       if (!state.driveActive) {   // 念のため二重 START 防止
         btn.textContent = 'START';
         btn.className = 'big-action start';
+        if (landBtn) {
+          landBtn.textContent = 'START';
+          landBtn.className = 'land-start-btn';
+        }
       }
     }, 5000);
 
@@ -2949,12 +2965,13 @@
           document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
         }
         if (state.speedGraph) state.speedGraph.draw();
-        // 横画面 widget も同フレームで更新
-        bindLandscapeHandlers();
-        updateLandscapeWidgets();
       } catch (_) {
         // Skip bad render frame; do not stop RAF loop
       }
+
+      // 横画面 widget — 描画エラーに巻き込まれないよう独立で実行
+      bindLandscapeHandlers();
+      updateLandscapeWidgets();
 
       state.rafId = requestAnimationFrame(tick);
     }
