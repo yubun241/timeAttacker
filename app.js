@@ -382,6 +382,7 @@
 
     // Drive
     driveActive: false,                // session armed
+    dashboardMode: false,              // コース選択なし OBD ダッシュボードモード
     driveStartT: null,                 // session start (for FINISH countdown)
     lapStartT: null,                   // current lap start
     lapStarted: false,                 // start line crossed
@@ -498,6 +499,7 @@
   }
 
   document.getElementById('btn-new-course').addEventListener('click', () => {
+    state.dashboardMode = false;   // 通常の計測モードで開く
     const c = {
       id: uid(),
       name: '新規コース',
@@ -516,6 +518,12 @@
     saveCourses();
     state.activeCourseId = c.id;
     openEdit();
+  });
+
+  // ダッシュボードモードで drive 画面を開く
+  document.getElementById('btn-dashboard-mode').addEventListener('click', () => {
+    state.dashboardMode = true;
+    openDrive();
   });
 
   // ============================================================
@@ -2407,6 +2415,45 @@
   function openDrive() {
     showScreen('drive');
     const c = getActiveCourse();
+
+    // ダッシュボードモード: コース選択不要で OBD モニターとして起動
+    if (state.dashboardMode) {
+      document.getElementById('drive-course-name').textContent = 'DASHBOARD';
+      setDriveState('OBD2 モニター', '');
+      resetDriveMetrics();
+
+      // ダッシュボードモードでは START ボタンを無効化
+      const btn = document.getElementById('btn-start-stop');
+      btn.textContent = 'OBD ONLY';
+      btn.className = 'big-action';
+      btn.disabled = true;
+
+      const landBtn = document.getElementById('land-btn-start-stop');
+      if (landBtn) {
+        landBtn.textContent = 'OBD ONLY';
+        landBtn.className = 'land-start-btn land-dash-only';
+        landBtn.disabled = true;
+      }
+
+      // Init canvas / LED
+      state.gball = new GBall(document.getElementById('gball-canvas'));
+      state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
+      state.csvRows = [];
+      buildLandscapeLedBar();
+      startTimerLoop();
+
+      const motionBtn = document.getElementById('btn-motion-perm');
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        motionBtn.style.display = '';
+      } else {
+        motionBtn.style.display = 'none';
+        attachMotionListener();
+      }
+      return;
+    }
+
+    // 通常の計測モード
     if (!c) return;
 
     document.getElementById('drive-course-name').textContent = c.name;
@@ -2425,6 +2472,20 @@
     const btn = document.getElementById('btn-start-stop');
     btn.textContent = 'START';
     btn.className = 'big-action start';
+
+    // 横画面ボタンも初期化
+    const landBtn = document.getElementById('land-btn-start-stop');
+    if (landBtn) {
+      landBtn.textContent = 'START';
+      landBtn.className = 'land-start-btn';
+    }
+
+    // LED バー構築（設定変更後の再構築も兼ねる）
+    buildLandscapeLedBar();
+
+    // OBD2 接続中はダッシュボード計測外でも即時有効にするため
+    // START 前からループを起動（driveActive=false のまま tick は安全に動く）
+    startTimerLoop();
 
     // iOS DeviceMotion permission prompt button
     const motionBtn = document.getElementById('btn-motion-perm');
@@ -2526,8 +2587,21 @@
     state.rafId = null;
     releaseWakeLock();
     detachMotionListener();
-    showScreen('edit');
-    if (state.editMap) setTimeout(() => state.editMap.invalidateSize(), 50);
+
+    // START ボタンの disabled を解除（ダッシュボードモードで disabled 化した場合）
+    const btn = document.getElementById('btn-start-stop');
+    if (btn) btn.disabled = false;
+    const landBtn = document.getElementById('land-btn-start-stop');
+    if (landBtn) landBtn.disabled = false;
+
+    // ダッシュボードモードで入った場合はホームへ / 通常はコース編集へ
+    if (state.dashboardMode) {
+      state.dashboardMode = false;
+      showScreen('home');
+    } else {
+      showScreen('edit');
+      if (state.editMap) setTimeout(() => state.editMap.invalidateSize(), 50);
+    }
   });
 
   function finishSession() {

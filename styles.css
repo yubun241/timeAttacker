@@ -223,6 +223,52 @@ body::before {
 .btn-primary.big { width: 100%; padding: 16px; }
 .btn-primary .plus { font-size: 18px; }
 
+/* ── ダッシュボードモードボタン ── */
+.btn-dashboard {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1.5px solid var(--border-strong);
+  padding: 14px 18px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-transform: uppercase;
+  transition: border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-dashboard.big { width: 100%; margin-top: 10px; }
+.btn-dashboard:active,
+.btn-dashboard:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.btn-dashboard .dash-icon { font-size: 16px; opacity: 0.8; }
+
+.dashboard-mode-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ダッシュボードモード時の OBD ONLY ボタン（横画面） */
+.land-start-btn.land-dash-only {
+  background: var(--bg-elev-2);
+  color: var(--fg-faint);
+  font-size: clamp(14px, 2vw, 22px);
+  cursor: default;
+  opacity: 0.7;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--fg-dim);
