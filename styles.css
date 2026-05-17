@@ -616,14 +616,14 @@ body::before {
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: 4px;
-  padding: 22px 14px;
+  padding: 14px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .ns-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.2em;
   color: var(--fg-dim);
   text-transform: uppercase;
@@ -631,7 +631,7 @@ body::before {
 .ns-value {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
