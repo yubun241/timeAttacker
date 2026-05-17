@@ -1447,7 +1447,7 @@ body.landscape .screen.active { background: #000; }
 .land-lap-num {
   font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-weight: 900;
-  font-size: clamp(40px, 7vw, 80px);
+  font-size: clamp(32px, 5.5vw, 64px);
   color: #777;
   line-height: 1;
   text-align: center;
