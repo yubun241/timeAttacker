@@ -1563,11 +1563,11 @@ body.landscape .screen.active { background: #000; }
   padding: 2px 4px 8px;
 }
 
-/* === Bottom row — 中央列を狭め、左カラム(RECORD/LATEST)との干渉を回避 === */
+/* === Bottom row — センサーを右(START)側に寄せ、左カラム干渉を物理分離 === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 1.15fr 0.7fr 1.6fr;  /* 中央↓ / 右(START)↑ */
-  gap: 12px;                                   /* 左カラムとの余白を広げる */
+  grid-template-columns: 1.15fr 1.6fr 1.0fr;  /* 中央↑↑ / START↓↓ */
+  gap: 12px;
   align-items: stretch;
 }
 .land-bl-times {
@@ -1582,10 +1582,11 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-end;        /* ← センサー行をSTARTボタン側(右端)に寄せる */
   gap: 4px;
   min-width: 0;
   overflow: hidden;
-  padding: 4px 6px 4px 8px;
+  padding: 4px 8px;
 }
 .land-bottom > .land-start-btn {
   grid-column: 3;
@@ -1618,10 +1619,12 @@ body.landscape .screen.active { background: #000; }
    - 緑を排除し、ラベル=--fg-dim / 値=--fg
    - 2行構成で中央列に収める
    - 細い区切り線で RPM/Boost と同階層の情報帯として整列
+   - 自然幅 + 右寄せで左カラム(RECORD/LATEST)と物理分離
 */
 .land-bm-sensors .land-sensor-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(4.2em, auto);  /* ラベル自然幅 + 値固定幅 */
+  gap: 14px;
   align-items: baseline;
   white-space: nowrap;
   padding: 4px 2px;
@@ -1643,6 +1646,7 @@ body.landscape .screen.active { background: #000; }
   font-weight: 700;
   font-size: clamp(17px, 2.4vw, 24px);
   letter-spacing: 0.01em;
+  text-align: right;            /* 値を右揃え固定 */
 }
 .land-bm-sensors .land-sv em {
   font-style: normal;
