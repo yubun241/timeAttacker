@@ -966,11 +966,17 @@
       // ELM327 初期化シーケンス（待機時間を長めに確保）
       _sendQueue = []; _sendBusy = false;   // 送信キューをリセット
       await bleSleep(500);
-      bleSend('ATZ'); await bleSleep(2000); // リセット完了まで余裕を持って待機
-      for (const cmd of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATST FF', 'ATSP0']) {
-        bleSend(cmd);
-        await bleSleep(500);               // 400ms → 500ms（安価なELM327でも確実に処理）
-      }
+
+      bleSend('ATZ');    await bleSleep(2000);  // リセット完了まで余裕を持って待機
+      bleSend('ATE0');   await bleSleep(600);   // echo off
+      bleSend('ATL0');   await bleSleep(400);   // linefeed off
+      bleSend('ATS0');   await bleSleep(400);   // spaces off
+      bleSend('ATH0');   await bleSleep(400);   // headers off
+      bleSend('ATST FF'); await bleSleep(500);  // OBD タイムアウト最大
+
+      // ATSP0 (自動プロトコル検出) は BMW CAN バス検出で最大 2 秒必要。
+      // 500ms では検出完了前にポーリング開始 → STOPPED → ? の連鎖になる。
+      bleSend('ATSP0');  await bleSleep(2500);
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1598,7 +1604,31 @@
   // PID 別パース
   function parseObdLine(pid, raw) {
     const s = raw.replace(/[\s\r\n>]/g, '').toUpperCase();
-    if (!s || OBD_NOISE.some(n => s.includes(n))) return false;
+    if (!s) return false;
+
+    // ノイズ判定 + STOPPED 連続カウント
+    if (OBD_NOISE.some(n => s.includes(n))) {
+      if (s.includes('STOPPED') || s.includes('BUSBUSY') || s.includes('UNABLE')) {
+        _stoppedCount++;
+        if (_stoppedCount >= STOPPED_BACKOFF && pollState.active) {
+          _stoppedCount = 0;
+          // ポーリング 3 秒停止 → ATSP0 再送 → ポーリング再開
+          bleStopPolling();
+          toast('OBD 再試行... イグニッション ON を確認してください');
+          setTimeout(() => {
+            if (state.obd.connected) {
+              bleSend('ATSP0');
+              setTimeout(() => bleStartPolling(), 2500);
+            }
+          }, 3000);
+        }
+      } else {
+        _stoppedCount = 0;
+      }
+      return false;
+    }
+    _stoppedCount = 0;
+
     // 応答ヘッダ "4x" を探す (PID 010C → 41 0C ... の場合 "41" の "1" 部分は元の "1")
     const hdr = '4' + pid.slice(1);
     const idx = s.indexOf(hdr);
@@ -2028,6 +2058,9 @@
   let _lastDataAt          = 0;
   let _consecutiveTimeouts = 0;
   let _watchdogTimer  = null;
+  // STOPPED 連続カウント — プロトコル検出失敗・車両不応答の自動検出
+  let _stoppedCount  = 0;
+  const STOPPED_BACKOFF = 15;  // 15 連続で自動リカバリー試行
   let _keepAliveTimer = null;
   let _reconnecting   = false;
 
@@ -2038,14 +2071,19 @@
   function _updateDebugPanel() {
     const panel = document.getElementById('obd-debug-panel');
     if (!panel) return;
-    const show = state.obd.status === 'connected';
-    panel.style.display = show ? '' : 'none';
-    if (!show) return;
+    // 接続状態に関わらず常時表示（診断に役立てる）
+    panel.style.display = '';
     const el = id => document.getElementById(id);
+    const st = state.obd.status || 'disconnected';
+    if (el('dbg-status')) {
+      el('dbg-status').textContent = st;
+      el('dbg-status').style.color = st === 'connected' ? '#22e54a' : '#ff3d1a';
+    }
     if (el('dbg-count'))   el('dbg-count').textContent   = _dbgRxCount;
     if (el('dbg-ok'))      el('dbg-ok').textContent      = _dbgOkCount;
     if (el('dbg-timeout')) el('dbg-timeout').textContent = _consecutiveTimeouts;
-    if (el('dbg-rpm'))     el('dbg-rpm').textContent     = state.obd.rpm ?? '--';
+    if (el('dbg-stopped')) el('dbg-stopped').textContent = _stoppedCount;
+    if (el('dbg-rpm'))     el('dbg-rpm').textContent     = state.obd.rpm     ?? '--';
     if (el('dbg-coolant')) el('dbg-coolant').textContent = state.obd.coolant ?? '--';
     if (el('dbg-oil'))     el('dbg-oil').textContent     = state.obd.oiltemp ?? '--';
   }
