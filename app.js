@@ -382,6 +382,7 @@
 
     // Drive
     driveActive: false,                // session armed
+    dashboardMode: false,              // コース選択なし OBD ダッシュボードモード
     driveStartT: null,                 // session start (for FINISH countdown)
     lapStartT: null,                   // current lap start
     lapStarted: false,                 // start line crossed
@@ -498,6 +499,7 @@
   }
 
   document.getElementById('btn-new-course').addEventListener('click', () => {
+    state.dashboardMode = false;   // 通常の計測モードで開く
     const c = {
       id: uid(),
       name: '新規コース',
@@ -516,6 +518,12 @@
     saveCourses();
     state.activeCourseId = c.id;
     openEdit();
+  });
+
+  // ダッシュボードモードで drive 画面を開く
+  document.getElementById('btn-dashboard-mode').addEventListener('click', () => {
+    state.dashboardMode = true;
+    openDrive();
   });
 
   // ============================================================
@@ -699,11 +707,33 @@
   function bleSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   // ATコマンド送信
+  // BLE 送信キュー — 複数の write が競合しないよう 1 件ずつ順番に処理
+  let _sendQueue = [];
+  let _sendBusy  = false;
+
+  async function _drainSendQueue() {
+    if (_sendBusy) return;
+    _sendBusy = true;
+    while (_sendQueue.length > 0) {
+      const cmd = _sendQueue.shift();
+      if (!state.obd.txChar) break;
+      try {
+        await state.obd.txChar.writeValueWithoutResponse(
+          new TextEncoder().encode(cmd + '\r')
+        );
+      } catch (e) {
+        console.warn('[BLE SEND]', e);
+      }
+      // ELM327 が次コマンドを受け付けるまでの最短インターバル
+      await bleSleep(20);
+    }
+    _sendBusy = false;
+  }
+
   function bleSend(cmd) {
     if (!state.obd.txChar) return;
-    state.obd.txChar.writeValueWithoutResponse(
-      new TextEncoder().encode(cmd + '\r')
-    ).catch(e => console.warn('[BLE SEND]', e));
+    _sendQueue.push(cmd);
+    _drainSendQueue();
   }
 
   // 接続状態の UI 更新（設定画面 + Drive 画面のインジケータ）
@@ -929,27 +959,18 @@
 
       // 通知受信 → PID 応答パースへ
       await rxChar.startNotifications();
-      // 重複登録防止
-      if (!rxChar._taListenerAttached) {
-        rxChar.addEventListener('characteristicvaluechanged', bleOnData);
-        rxChar._taListenerAttached = true;
-      }
+      // 旧リスナーを必ず削除してから再登録（再接続時の二重登録防止）
+      rxChar.removeEventListener('characteristicvaluechanged', bleOnData);
+      rxChar.addEventListener('characteristicvaluechanged', bleOnData);
 
-      // ELM327 初期化シーケンス
+      // ELM327 初期化シーケンス（待機時間を長めに確保）
+      _sendQueue = []; _sendBusy = false;   // 送信キューをリセット
       await bleSleep(500);
-
-      // ─── ELM327 初期化シーケンス ──────────────────────────────
-      // ATZ だけは長めに待つ（リセット完了まで）
-      bleSend('ATZ');   await bleSleep(1800);
-      bleSend('ATE0');  await bleSleep(500);   // echo off
-      bleSend('ATL0');  await bleSleep(300);   // linefeed off
-      bleSend('ATS0');  await bleSleep(300);   // spaces off
-      bleSend('ATH0');  await bleSleep(300);   // headers off
-      bleSend('ATST FF'); await bleSleep(400); // timeout 最大
-      // ATSP0 (自動プロトコル検出) は CAN バス検出で最大 2 秒かかる
-      // 短すぎると STOPPED → ? の連鎖になるため 2200ms 待機
-      bleSend('ATSP0'); await bleSleep(2200);
-      // ──────────────────────────────────────────────────────────
+      bleSend('ATZ'); await bleSleep(2000); // リセット完了まで余裕を持って待機
+      for (const cmd of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATST FF', 'ATSP0']) {
+        bleSend(cmd);
+        await bleSleep(500);               // 400ms → 500ms（安価なELM327でも確実に処理）
+      }
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1439,31 +1460,6 @@
   });
 
   // ============================================================
-  // ── OBD デバッグ統計（設定画面のパネルに表示）─────────
-  const _dbg = { recvCount: 0, parseOk: 0, timeout: 0, lastRaw: '--' };
-
-  function updateOBDDebugPanel() {
-    const el = id => document.getElementById(id);
-    if (!el('dbg-status')) return;
-    const s = state.obd.status;
-    el('dbg-status').textContent     = s || '--';
-    el('dbg-status').style.color     = s === 'connected' ? '#22e54a' : '#ff3d1a';
-    el('dbg-raw').textContent        = _dbg.lastRaw;
-    el('dbg-recv-count').textContent = String(_dbg.recvCount);
-    el('dbg-parse-ok').textContent   = String(_dbg.parseOk);
-    el('dbg-timeout').textContent    = String(_dbg.timeout);
-    el('dbg-rpm').textContent        = state.obd.rpm     != null ? String(state.obd.rpm)     : '--';
-    el('dbg-coolant').textContent    = state.obd.coolant != null ? String(state.obd.coolant) : '--';
-    el('dbg-oil').textContent        = state.obd.oiltemp != null ? String(state.obd.oiltemp) : '--';
-  }
-
-  // 設定画面を開いているときだけリアルタイム更新（500ms）
-  setInterval(() => {
-    if (document.getElementById('screen-settings')?.classList.contains('active')) {
-      updateOBDDebugPanel();
-    }
-  }, 500);
-
   // OBD2 PID ポーリング & パース (Phase 2)
   // ============================================================
   // 設定された PID を「高速」「低速」に振り分け、高速は毎サイクル送信、
@@ -1539,7 +1535,6 @@
         pollState.buf     = '';
         pollState.waiting = false;
         _consecutiveTimeouts++;
-        _dbg.timeout++;
       }, 500);
     }, 50);
   }
@@ -1548,14 +1543,17 @@
     pollState.active  = false;
     pollState.buf     = '';
     pollState.waiting = false;
+    _sendQueue = []; _sendBusy = false;    // 送信キューもクリア
     if (_pollTimer)    { clearInterval(_pollTimer);    _pollTimer = null; }
     if (_timeoutTimer) { clearTimeout(_timeoutTimer);  _timeoutTimer = null; }
   }
 
   // notify ハンドラ — 受信データをバッファに蓄積し、'>' で1応答完了として処理
   function bleOnData(event) {
+    let chunk = '';
     try {
-      pollState.buf += new TextDecoder().decode(event.target.value);
+      chunk = new TextDecoder().decode(event.target.value);
+      pollState.buf += chunk;
     } catch (_) { return; }
     // バッファ肥大化ガード
     if (pollState.buf.length > 512) {
@@ -1571,14 +1569,14 @@
     pollState.waiting = false;
     if (!state.obd.connected) return;
 
+    // デバッグ: 受信データを記録
+    _dbgRxCount++;
+    const el = document.getElementById('dbg-raw');
+    if (el) el.textContent = raw.replace(/[\r\n]/g, '↵').slice(0, 40);
+
     state.obd.lastUpdateMs = Date.now();
     _lastDataAt            = Date.now();
     _consecutiveTimeouts   = 0;
-
-    // DEBUG 統計
-    _dbg.recvCount++;
-    _dbg.lastRaw = raw.replace(/[\r\n]/g, '↵').slice(0, 60);
-    updateOBDDebugPanel();
 
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
@@ -1600,69 +1598,46 @@
   // PID 別パース
   function parseObdLine(pid, raw) {
     const s = raw.replace(/[\s\r\n>]/g, '').toUpperCase();
-    if (!s) return false;
-    if (OBD_NOISE.some(n => s.includes(n))) {
-      // STOPPED が連続で続く場合、ELM327 が混乱している可能性あり
-      // → ポーリングを一時停止して ELM327 が落ち着くのを待つ
-      if (s.includes('STOPPED') || s.includes('UNABLE') || s.includes('BUSBUSY')) {
-        _stoppedCount++;
-        if (_stoppedCount >= STOPPED_REINIT_THRESHOLD && pollState.active) {
-          _stoppedCount = 0;
-          // 3秒間ポーリングを止めてから再開
-          bleStopPolling();
-          setTimeout(() => {
-            if (state.obd.connected) {
-              // 再初期化なしで、単純にポーリングを再開する
-              // (ATSP0 再送は接続負荷が高いため避ける)
-              bleSend('AT D');    // デフォルト設定に戻す
-              setTimeout(() => {
-                bleSend('ATSP0');
-                setTimeout(() => bleStartPolling(), 2200);
-              }, 400);
-            }
-          }, 3000);
-          toast('ELM327 再試行中... イグニッションONを確認してください');
-          return false;
-        }
-      } else {
-        _stoppedCount = 0;  // STOPPED 以外のノイズはカウントリセット
-      }
-      return false;
-    }
-    _stoppedCount = 0;  // パース成功候補 → カウントリセット
-    // ─ ヘッダ照合 ─
+    if (!s || OBD_NOISE.some(n => s.includes(n))) return false;
     // 応答ヘッダ "4x" を探す (PID 010C → 41 0C ... の場合 "41" の "1" 部分は元の "1")
     const hdr = '4' + pid.slice(1);
     const idx = s.indexOf(hdr);
     if (idx < 0) return false;
     const v = s.slice(idx + 4);
-    let parsed = false;
     try {
       if (pid === '010C' && v.length >= 4) {
+        // RPM = ((A*256) + B) / 4
         state.obd.rpm = (parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16)) >> 2;
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       } else if (pid === '0105' && v.length >= 2) {
         state.obd.coolant = parseInt(v.slice(0, 2), 16) - 40;
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       } else if (pid === '015C' && v.length >= 2) {
         state.obd.oiltemp = parseInt(v.slice(0, 2), 16) - 40;
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       } else if (pid === '010F' && v.length >= 2) {
         state.obd.intake = parseInt(v.slice(0, 2), 16) - 40;
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       } else if (pid === '0111' && v.length >= 2) {
         state.obd.throttle = Math.round(parseInt(v.slice(0, 2), 16) / 255 * 100);
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       } else if (pid === '010B' && v.length >= 2) {
+        // MAP (Manifold Absolute Pressure) [kPa] = A
+        // Boost [kg/cm²] = (MAP - 大気圧101.325) / 98.0665
         state.obd.mapKpa = parseInt(v.slice(0, 2), 16);
         state.obd.boost  = (state.obd.mapKpa - 101.325) / 98.0665;
-        parsed = true;
+        _dbgOkCount++;
+        return true;
       }
     } catch (e) {
       console.warn('[OBD PARSE]', e);
     }
-    if (parsed) _dbg.parseOk++;
-    return parsed;
+    return false;
   }
 
   // ============================================================
@@ -2055,14 +2030,33 @@
   let _watchdogTimer  = null;
   let _keepAliveTimer = null;
   let _reconnecting   = false;
-  // STOPPED 連続カウント — 一定回数超えたら ELM327 を再初期化
-  let _stoppedCount   = 0;
-  const STOPPED_REINIT_THRESHOLD = 15;
+
+  // デバッグカウンタ
+  let _dbgRxCount  = 0;
+  let _dbgOkCount  = 0;
+
+  function _updateDebugPanel() {
+    const panel = document.getElementById('obd-debug-panel');
+    if (!panel) return;
+    const show = state.obd.status === 'connected';
+    panel.style.display = show ? '' : 'none';
+    if (!show) return;
+    const el = id => document.getElementById(id);
+    if (el('dbg-count'))   el('dbg-count').textContent   = _dbgRxCount;
+    if (el('dbg-ok'))      el('dbg-ok').textContent      = _dbgOkCount;
+    if (el('dbg-timeout')) el('dbg-timeout').textContent = _consecutiveTimeouts;
+    if (el('dbg-rpm'))     el('dbg-rpm').textContent     = state.obd.rpm ?? '--';
+    if (el('dbg-coolant')) el('dbg-coolant').textContent = state.obd.coolant ?? '--';
+    if (el('dbg-oil'))     el('dbg-oil').textContent     = state.obd.oiltemp ?? '--';
+  }
+  setInterval(_updateDebugPanel, 500);
 
   function startKeepAlive() {
     if (_keepAliveTimer) clearInterval(_keepAliveTimer);
     _keepAliveTimer = setInterval(() => {
       if (!state.obd.connected || !state.obd.txChar) return;
+      // ポーリング応答待ち中は絶対に割り込まない
+      if (pollState.waiting) return;
       // 'AT I' = ELM327 識別情報。無害で応答が返るため接続維持に最適
       bleSend('AT I');
     }, KEEPALIVE_MS);
@@ -2478,6 +2472,45 @@
   function openDrive() {
     showScreen('drive');
     const c = getActiveCourse();
+
+    // ダッシュボードモード: コース選択不要で OBD モニターとして起動
+    if (state.dashboardMode) {
+      document.getElementById('drive-course-name').textContent = 'DASHBOARD';
+      setDriveState('OBD2 モニター', '');
+      resetDriveMetrics();
+
+      // ダッシュボードモードでは START ボタンを無効化
+      const btn = document.getElementById('btn-start-stop');
+      btn.textContent = 'OBD ONLY';
+      btn.className = 'big-action';
+      btn.disabled = true;
+
+      const landBtn = document.getElementById('land-btn-start-stop');
+      if (landBtn) {
+        landBtn.textContent = 'OBD ONLY';
+        landBtn.className = 'land-start-btn land-dash-only';
+        landBtn.disabled = true;
+      }
+
+      // Init canvas / LED
+      state.gball = new GBall(document.getElementById('gball-canvas'));
+      state.speedGraph = new SpeedGraph(document.getElementById('speed-canvas'));
+      state.csvRows = [];
+      buildLandscapeLedBar();
+      startTimerLoop();
+
+      const motionBtn = document.getElementById('btn-motion-perm');
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        motionBtn.style.display = '';
+      } else {
+        motionBtn.style.display = 'none';
+        attachMotionListener();
+      }
+      return;
+    }
+
+    // 通常の計測モード
     if (!c) return;
 
     document.getElementById('drive-course-name').textContent = c.name;
@@ -2496,6 +2529,20 @@
     const btn = document.getElementById('btn-start-stop');
     btn.textContent = 'START';
     btn.className = 'big-action start';
+
+    // 横画面ボタンも初期化
+    const landBtn = document.getElementById('land-btn-start-stop');
+    if (landBtn) {
+      landBtn.textContent = 'START';
+      landBtn.className = 'land-start-btn';
+    }
+
+    // LED バー構築（設定変更後の再構築も兼ねる）
+    buildLandscapeLedBar();
+
+    // OBD2 接続中はダッシュボード計測外でも即時有効にするため
+    // START 前からループを起動（driveActive=false のまま tick は安全に動く）
+    startTimerLoop();
 
     // iOS DeviceMotion permission prompt button
     const motionBtn = document.getElementById('btn-motion-perm');
@@ -2569,6 +2616,13 @@
       btn.textContent = 'RUNNING';
       btn.className = 'big-action running';
 
+      // 横画面ボタンも即時同期
+      const landBtn = document.getElementById('land-btn-start-stop');
+      if (landBtn) {
+        landBtn.textContent = 'RUNNING';
+        landBtn.className = 'land-start-btn running';
+      }
+
       setDriveState('スタート線通過待ち', 'armed');
       startGPS();
       requestWakeLock();
@@ -2590,8 +2644,21 @@
     state.rafId = null;
     releaseWakeLock();
     detachMotionListener();
-    showScreen('edit');
-    if (state.editMap) setTimeout(() => state.editMap.invalidateSize(), 50);
+
+    // START ボタンの disabled を解除（ダッシュボードモードで disabled 化した場合）
+    const btn = document.getElementById('btn-start-stop');
+    if (btn) btn.disabled = false;
+    const landBtn = document.getElementById('land-btn-start-stop');
+    if (landBtn) landBtn.disabled = false;
+
+    // ダッシュボードモードで入った場合はホームへ / 通常はコース編集へ
+    if (state.dashboardMode) {
+      state.dashboardMode = false;
+      showScreen('home');
+    } else {
+      showScreen('edit');
+      if (state.editMap) setTimeout(() => state.editMap.invalidateSize(), 50);
+    }
   });
 
   function finishSession() {
@@ -2601,14 +2668,23 @@
     stopGPS();
     releaseWakeLock();
     const btn = document.getElementById('btn-start-stop');
+    const landBtn = document.getElementById('land-btn-start-stop');
     // 一旦 STOP を表示（5秒間の点滅と共に視認）→ その後 START に戻す
     btn.textContent = 'STOP';
     btn.className = 'big-action stop';
+    if (landBtn) {
+      landBtn.textContent = 'STOP';
+      landBtn.className = 'land-start-btn stop';
+    }
     setTimeout(() => {
       // 5秒後にユーザーが再度走行できる状態へ
       if (!state.driveActive) {   // 念のため二重 START 防止
         btn.textContent = 'START';
         btn.className = 'big-action start';
+        if (landBtn) {
+          landBtn.textContent = 'START';
+          landBtn.className = 'land-start-btn';
+        }
       }
     }, 5000);
 
@@ -3020,12 +3096,13 @@
           document.getElementById('g-text').textContent = `${tg.toFixed(2)} G`;
         }
         if (state.speedGraph) state.speedGraph.draw();
-        // 横画面 widget も同フレームで更新
-        bindLandscapeHandlers();
-        updateLandscapeWidgets();
       } catch (_) {
         // Skip bad render frame; do not stop RAF loop
       }
+
+      // 横画面 widget — 描画エラーに巻き込まれないよう独立で実行
+      bindLandscapeHandlers();
+      updateLandscapeWidgets();
 
       state.rafId = requestAnimationFrame(tick);
     }

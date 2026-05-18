@@ -104,6 +104,14 @@ so inaccuracies may occur depending on the environment.</div>
         <span>新規コースを作成</span>
       </button>
 
+      <button id="btn-dashboard-mode" class="btn-dashboard big">
+        <span class="dash-icon">◈</span>
+        <span>ダッシュボードとして使用</span>
+      </button>
+      <div class="dashboard-mode-hint">
+        OBD2 の接続設定は ⚙ 設定画面から行ってください
+      </div>
+
       <div class="hint">
         マップ上で線を引き、スタート / ゴール / セクター線を定義します。
       </div>
@@ -335,25 +343,22 @@ so inaccuracies may occur depending on the environment.</div>
         <div class="ble-hint" id="ble-hint">
           UniCarScan 2000 など ELM327 互換アダプタに対応。Android Chrome 推奨。
         </div>
+
+        <!-- OBD デバッグパネル（接続後に表示） -->
+        <div class="obd-debug-panel" id="obd-debug-panel" style="display:none">
+          <div class="obd-debug-title">▸ OBD DEBUG</div>
+          <div class="obd-debug-row"><span>最終受信 raw</span><span id="dbg-raw" class="dbg-val">--</span></div>
+          <div class="obd-debug-row"><span>受信カウント</span><span id="dbg-count" class="dbg-val">0</span></div>
+          <div class="obd-debug-row"><span>パース成功</span><span id="dbg-ok" class="dbg-val">0</span></div>
+          <div class="obd-debug-row"><span>タイムアウト</span><span id="dbg-timeout" class="dbg-val">0</span></div>
+          <div class="obd-debug-row"><span>RPM</span><span id="dbg-rpm" class="dbg-val">--</span></div>
+          <div class="obd-debug-row"><span>Coolant</span><span id="dbg-coolant" class="dbg-val">--</span></div>
+          <div class="obd-debug-row"><span>Oil</span><span id="dbg-oil" class="dbg-val">--</span></div>
+        </div>
       </div>
 
       <div class="settings-foot">
-        <!-- ── OBD DEBUG パネル ─────────────────────────── -->
-      <details class="settings-section obd-debug-section">
-        <summary class="obd-debug-title">▶ OBD DEBUG</summary>
-        <div class="obd-debug-body">
-          <div class="dbg-row"><span>接続状態</span><span id="dbg-status">--</span></div>
-          <div class="dbg-row"><span>最終受信 raw</span><span id="dbg-raw" class="dbg-mono">--</span></div>
-          <div class="dbg-row"><span>受信カウント</span><span id="dbg-recv-count">0</span></div>
-          <div class="dbg-row"><span>パース成功</span><span id="dbg-parse-ok">0</span></div>
-          <div class="dbg-row"><span>タイムアウト</span><span id="dbg-timeout">0</span></div>
-          <div class="dbg-row"><span>RPM</span><span id="dbg-rpm">--</span></div>
-          <div class="dbg-row"><span>Coolant</span><span id="dbg-coolant">--</span></div>
-          <div class="dbg-row"><span>Oil</span><span id="dbg-oil">--</span></div>
-        </div>
-      </details>
-
-      <button id="btn-settings-save" class="btn-primary big">保存</button>
+        <button id="btn-settings-save" class="btn-primary big">保存</button>
       </div>
 
     </main>
@@ -704,9 +709,8 @@ so inaccuracies may occur depending on the environment.</div>
           <!-- col 1: 空（RECORD/LATEST は上段左カラムに移動） -->
           <div></div>
           <div class="land-bm-sensors">
-            <div class="land-sensor-row"><span>Speed</span><span class="land-sv"><span id="land-speed">--</span><em>km/h</em></span></div>
-            <div class="land-sensor-row"><span>Coolant temp</span><span class="land-sv"><span id="land-coolant">--</span><em>°C</em></span></div>
-            <div class="land-sensor-row"><span>Oil temp</span><span class="land-sv"><span id="land-oil">--</span><em>°C</em></span></div>
+            <div class="land-sensor-row"><span class="land-sr-lbl">Coolant Temp</span><span class="land-sv"><span id="land-coolant">--</span><em>°C</em></span></div>
+            <div class="land-sensor-row"><span class="land-sr-lbl">Oil Temp</span><span class="land-sv"><span id="land-oil">--</span><em>°C</em></span></div>
           </div>
           <button id="land-btn-start-stop" class="land-start-btn">START</button>
         </div>
