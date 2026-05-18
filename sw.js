@@ -1,8 +1,7 @@
-// TIME ATTACKER — smart service worker
-// App shell cache + auto update for CSS / JS / HTML
+// TIME ATTACKER — minimal service worker
+// Caches app shell for offline use. Map tiles fall back to network.
 
-const CACHE = `timeattacker-v${Date.now()}`;
-
+const CACHE = 'timeattacker-v1-24';
 const APP_SHELL = [
   './',
   './index.html',
@@ -13,88 +12,29 @@ const APP_SHELL = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
-/* =========================
-   INSTALL
-========================= */
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then(cache => cache.addAll(APP_SHELL))
-      .catch(() => {})
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(APP_SHELL)).catch(() => {})
   );
-
   self.skipWaiting();
 });
 
-/* =========================
-   ACTIVATE
-========================= */
-self.addEventListener('activate', event => {
-  event.waitUntil(
+self.addEventListener('activate', e => {
+  e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE)
-          .map(key => caches.delete(key))
-      )
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     )
   );
-
   self.clients.claim();
 });
 
-/* =========================
-   FETCH
-========================= */
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  const url = new URL(request.url);
-
-  /* -------------------------
-     OpenStreetMap tiles
-     Network First
-  ------------------------- */
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
   if (url.host.includes('tile.openstreetmap.org')) {
-    event.respondWith(
-      fetch(request).catch(() => caches.match(request))
-    );
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
-
-  /* -------------------------
-     HTML / CSS / JS
-     Always update from network
-  ------------------------- */
-  if (
-    request.url.includes('index.html') ||
-    request.url.includes('styles.css') ||
-    request.url.includes('app.js')
-  ) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const responseClone = response.clone();
-
-          caches.open(CACHE).then(cache => {
-            cache.put(request, responseClone);
-          });
-
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
-
-    return;
-  }
-
-  /* -------------------------
-     Other files
-     Cache First
-  ------------------------- */
-  event.respondWith(
-    caches.match(request).then(cached => {
-      return cached || fetch(request);
-    })
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request))
   );
 });
