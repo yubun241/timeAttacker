@@ -223,6 +223,52 @@ body::before {
 .btn-primary.big { width: 100%; padding: 16px; }
 .btn-primary .plus { font-size: 18px; }
 
+/* ── ダッシュボードモードボタン ── */
+.btn-dashboard {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1.5px solid var(--border-strong);
+  padding: 14px 18px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-transform: uppercase;
+  transition: border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-dashboard.big { width: 100%; margin-top: 10px; }
+.btn-dashboard:active,
+.btn-dashboard:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.btn-dashboard .dash-icon { font-size: 16px; opacity: 0.8; }
+
+.dashboard-mode-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ダッシュボードモード時の OBD ONLY ボタン（横画面） */
+.land-start-btn.land-dash-only {
+  background: var(--bg-elev-2);
+  color: var(--fg-faint);
+  font-size: clamp(14px, 2vw, 22px);
+  cursor: default;
+  opacity: 0.7;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--fg-dim);
@@ -616,14 +662,14 @@ body::before {
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: 4px;
-  padding: 10px 14px;
+  padding: 14px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .ns-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.2em;
   color: var(--fg-dim);
   text-transform: uppercase;
@@ -631,7 +677,7 @@ body::before {
 .ns-value {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 22px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
@@ -669,11 +715,11 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-radius: 4px 4px 0 0;
+  padding: 12px 16px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-bottom: none;
+  /* border-bottom: none;*/
 }
 .ns-bar-label {
   font-family: var(--font-mono);
@@ -685,7 +731,7 @@ body::before {
 .ns-bar-num {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 28px;
+  font-size: 12px;
   color: var(--fg);
   line-height: 1;
 }
@@ -694,7 +740,7 @@ body::before {
 .big-timer {
   background: var(--accent);
   color: #1a1300;
-  border-radius: 0 0 4px 4px;
+  border-radius: 4px;
   padding: 14px;
   text-align: center;
   margin-top: -1px;
@@ -702,7 +748,7 @@ body::before {
 .time-display {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 46px;
+  font-size: 24px;
   letter-spacing: 0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1044,46 +1090,6 @@ body::before {
   border-color: var(--accent);
 }
 
-/* === OBD DEBUG panel === */
-.obd-debug-section { padding: 0; }
-.obd-debug-title {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: #4fc3f7;
-  letter-spacing: 0.12em;
-  padding: 12px 16px;
-  cursor: pointer;
-  list-style: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.obd-debug-title::-webkit-details-marker { display: none; }
-.obd-debug-body {
-  padding: 0 12px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.dbg-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 6px 0;
-  border-bottom: 1px dotted var(--border);
-  font-size: 13px;
-  gap: 12px;
-}
-.dbg-row:last-child { border-bottom: none; }
-.dbg-row > span:first-child { color: var(--fg-dim); flex-shrink: 0; }
-.dbg-row > span:last-child {
-  font-family: var(--font-mono);
-  color: var(--fg);
-  text-align: right;
-  word-break: break-all;
-  max-width: 60%;
-}
-.dbg-mono { font-family: var(--font-mono); font-size: 11px; }
-
 /* === Numeric input rows for settings === */
 .num-row {
   display: flex;
@@ -1237,7 +1243,7 @@ body.landscape .screen.active { background: #000; }
   background: #000;
   border: 1.5px solid #2c2f36;
   border-radius: 10px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1246,7 +1252,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 800;
   color: #fff;
-  font-size: clamp(15px, 2vw, 20px);
+  font-size: clamp(8px, 2vw, 20px);
   letter-spacing: 0.02em;
   margin-bottom: 4px;
 }
@@ -1254,7 +1260,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 700;
   color: #fff;
-  font-size: clamp(12px, 1.5vw, 16px);
+  font-size: clamp(8px, 1.5vw, 16px);
   letter-spacing: 0.02em;
   margin-bottom: 2px;
 }
@@ -1279,7 +1285,7 @@ body.landscape .screen.active { background: #000; }
   font-style: italic;
   font-weight: 900;
   color: #fff;
-  font-size: clamp(22px, 4.2vw, 46px);
+  font-size: clamp(14px, 4.2vw, 46px);
 }
 
 /* LAP TIME 大きい黄色ボックス */
@@ -1290,8 +1296,7 @@ body.landscape .screen.active { background: #000; }
   align-items: center;
   justify-content: center;
   flex: 2.4;
-  min-height: 0;
-  padding: 8px 10px;
+  padding: 24px 10px;
   overflow: hidden;
 }
 .land-laptime-val {
@@ -1300,7 +1305,7 @@ body.landscape .screen.active { background: #000; }
   font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   font-style: normal;
   font-weight: 800;
-  font-size: clamp(34px, 7.5vw, 96px);
+  font-size: clamp(22px, 7.5vw, 96px);
   color: #1a1300;
   text-align: center;
   line-height: 1;
@@ -1328,7 +1333,7 @@ body.landscape .screen.active { background: #000; }
   justify-content: center;
   flex: 1.8;
   min-height: 0;
-  padding: 6px 8px;
+  padding: 20px 8px;
   overflow: hidden;
 }
 .land-nextsec-val {
@@ -1348,7 +1353,7 @@ body.landscape .screen.active { background: #000; }
 /* RECORD / LATEST bands */
 .land-time-band {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 45px 1fr;
   align-items: center;
   background: var(--accent);
   border-radius: 4px;
@@ -1446,7 +1451,7 @@ body.landscape .screen.active { background: #000; }
 }
 .land-boost-box, .land-lap-box {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   align-items: flex-start;
 }
 .land-boost-lbl {
@@ -1483,11 +1488,12 @@ body.landscape .screen.active { background: #000; }
   font-size: clamp(14px, 1.9vw, 20px);
   text-align: left;
   width: 100%;
+  margin-top: 10px;
 }
 .land-lap-num {
   font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-weight: 900;
-  font-size: clamp(40px, 7vw, 80px);
+  font-size: clamp(32px, 5.5vw, 64px);
   color: #777;
   line-height: 1;
   text-align: center;
@@ -1604,11 +1610,11 @@ body.landscape .screen.active { background: #000; }
   padding: 2px 4px 8px;
 }
 
-/* === Bottom row — main grid と同じ 3 列 === */
+/* === Bottom row — センサーを右(START)側に寄せ、左カラム干渉を物理分離 === */
 .land-bottom {
   display: grid;
-  grid-template-columns: 1.15fr 1fr 1.35fr;   /* main と完全一致 */
-  gap: 8px;
+  grid-template-columns: 1.15fr 1.6fr 1.0fr;  /* 中央↑↑ / START↓↓ */
+  gap: 12px;
   align-items: stretch;
 }
 .land-bl-times {
@@ -1623,9 +1629,11 @@ body.landscape .screen.active { background: #000; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  align-items: flex-end;        /* ← センサー行をSTARTボタン側(右端)に寄せる */
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
+  padding: 4px 8px;
 }
 .land-bottom > .land-start-btn {
   grid-column: 3;
@@ -1654,22 +1662,45 @@ body.landscape .screen.active { background: #000; }
   padding-right: 12px;
 }
 
+/* ── Coolant / Oil temp 行（テーマ統合版） ──
+   - 緑を排除し、ラベル=--fg-dim / 値=--fg
+   - 2行構成で中央列に収める
+   - 細い区切り線で RPM/Boost と同階層の情報帯として整列
+   - 自然幅 + 右寄せで左カラム(RECORD/LATEST)と物理分離
+*/
 .land-bm-sensors .land-sensor-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  color: #22e54a;
-  font-style: italic;
-  font-weight: 700;
-  font-size: clamp(14px, 2vw, 20px);
+  grid-template-columns: auto minmax(4.2em, auto);  /* ラベル自然幅 + 値固定幅 */
+  gap: 14px;
   align-items: baseline;
   white-space: nowrap;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.land-bm-sensors .land-sv { font-family: var(--font-mono); }
-.land-bm-sensors .land-sv em {
-  font-style: italic;
-  font-size: 0.6em;
-  margin-left: 4px;
+.land-bm-sensors .land-sensor-row:last-child {
+  border-bottom: none;
+}
+.land-bm-sensors .land-sr-lbl {
+  color: var(--fg-dim);
+  font-weight: 600;
+  font-size: clamp(11px, 1.4vw, 15px);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.land-bm-sensors .land-sv {
+  font-family: var(--font-mono);
+  color: var(--fg);
   font-weight: 700;
+  font-size: clamp(17px, 2.4vw, 24px);
+  letter-spacing: 0.01em;
+  text-align: right;            /* 値を右揃え固定 */
+}
+.land-bm-sensors .land-sv em {
+  font-style: normal;
+  font-size: 0.55em;
+  margin-left: 4px;
+  font-weight: 500;
+  color: var(--fg-dim);
 }
 
 /* START / RUNNING / STOP の3状態 */
