@@ -344,9 +344,10 @@ so inaccuracies may occur depending on the environment.</div>
           UniCarScan 2000 など ELM327 互換アダプタに対応。Android Chrome 推奨。
         </div>
 
-        <!-- OBD デバッグパネル（接続後に表示） -->
-        <div class="obd-debug-panel" id="obd-debug-panel" style="display:none">
+        <!-- OBD デバッグパネル（常時表示） -->
+        <div class="obd-debug-panel" id="obd-debug-panel">
           <div class="obd-debug-title">▸ OBD DEBUG</div>
+          <div class="obd-debug-row"><span>接続状態</span><span id="dbg-status" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>最終受信 raw</span><span id="dbg-raw" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>受信カウント</span><span id="dbg-count" class="dbg-val">0</span></div>
           <div class="obd-debug-row"><span>パース成功</span><span id="dbg-ok" class="dbg-val">0</span></div>

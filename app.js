@@ -2038,10 +2038,11 @@
   function _updateDebugPanel() {
     const panel = document.getElementById('obd-debug-panel');
     if (!panel) return;
-    const show = state.obd.status === 'connected';
-    panel.style.display = show ? '' : 'none';
-    if (!show) return;
+    const connected = state.obd.status === 'connected';
+    // 常時表示（接続前は薄暗く、接続後はアクティブ表示）
+    panel.classList.toggle('obd-debug-active', connected);
     const el = id => document.getElementById(id);
+    if (el('dbg-status')) el('dbg-status').textContent = state.obd.status || '未接続';
     if (el('dbg-count'))   el('dbg-count').textContent   = _dbgRxCount;
     if (el('dbg-ok'))      el('dbg-ok').textContent      = _dbgOkCount;
     if (el('dbg-timeout')) el('dbg-timeout').textContent = _consecutiveTimeouts;
