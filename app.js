@@ -1550,8 +1550,10 @@
 
   // notify ハンドラ — 受信データをバッファに蓄積し、'>' で1応答完了として処理
   function bleOnData(event) {
+    let chunk = '';
     try {
-      pollState.buf += new TextDecoder().decode(event.target.value);
+      chunk = new TextDecoder().decode(event.target.value);
+      pollState.buf += chunk;
     } catch (_) { return; }
     // バッファ肥大化ガード
     if (pollState.buf.length > 512) {
@@ -1566,6 +1568,11 @@
     pollState.buf = '';
     pollState.waiting = false;
     if (!state.obd.connected) return;
+
+    // デバッグ: 受信データを記録
+    _dbgRxCount++;
+    const el = document.getElementById('dbg-raw');
+    if (el) el.textContent = raw.replace(/[\r\n]/g, '↵').slice(0, 40);
 
     state.obd.lastUpdateMs = Date.now();
     _lastDataAt            = Date.now();
@@ -1601,24 +1608,30 @@
       if (pid === '010C' && v.length >= 4) {
         // RPM = ((A*256) + B) / 4
         state.obd.rpm = (parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16)) >> 2;
+        _dbgOkCount++;
         return true;
       } else if (pid === '0105' && v.length >= 2) {
         state.obd.coolant = parseInt(v.slice(0, 2), 16) - 40;
+        _dbgOkCount++;
         return true;
       } else if (pid === '015C' && v.length >= 2) {
         state.obd.oiltemp = parseInt(v.slice(0, 2), 16) - 40;
+        _dbgOkCount++;
         return true;
       } else if (pid === '010F' && v.length >= 2) {
         state.obd.intake = parseInt(v.slice(0, 2), 16) - 40;
+        _dbgOkCount++;
         return true;
       } else if (pid === '0111' && v.length >= 2) {
         state.obd.throttle = Math.round(parseInt(v.slice(0, 2), 16) / 255 * 100);
+        _dbgOkCount++;
         return true;
       } else if (pid === '010B' && v.length >= 2) {
         // MAP (Manifold Absolute Pressure) [kPa] = A
         // Boost [kg/cm²] = (MAP - 大気圧101.325) / 98.0665
         state.obd.mapKpa = parseInt(v.slice(0, 2), 16);
         state.obd.boost  = (state.obd.mapKpa - 101.325) / 98.0665;
+        _dbgOkCount++;
         return true;
       }
     } catch (e) {
@@ -2017,6 +2030,26 @@
   let _watchdogTimer  = null;
   let _keepAliveTimer = null;
   let _reconnecting   = false;
+
+  // デバッグカウンタ
+  let _dbgRxCount  = 0;
+  let _dbgOkCount  = 0;
+
+  function _updateDebugPanel() {
+    const panel = document.getElementById('obd-debug-panel');
+    if (!panel) return;
+    const show = state.obd.status === 'connected';
+    panel.style.display = show ? '' : 'none';
+    if (!show) return;
+    const el = id => document.getElementById(id);
+    if (el('dbg-count'))   el('dbg-count').textContent   = _dbgRxCount;
+    if (el('dbg-ok'))      el('dbg-ok').textContent      = _dbgOkCount;
+    if (el('dbg-timeout')) el('dbg-timeout').textContent = _consecutiveTimeouts;
+    if (el('dbg-rpm'))     el('dbg-rpm').textContent     = state.obd.rpm ?? '--';
+    if (el('dbg-coolant')) el('dbg-coolant').textContent = state.obd.coolant ?? '--';
+    if (el('dbg-oil'))     el('dbg-oil').textContent     = state.obd.oiltemp ?? '--';
+  }
+  setInterval(_updateDebugPanel, 500);
 
   function startKeepAlive() {
     if (_keepAliveTimer) clearInterval(_keepAliveTimer);
