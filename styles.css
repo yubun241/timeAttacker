@@ -269,6 +269,12 @@ body::before {
   padding: 10px 12px;
   font-family: var(--font-mono);
   font-size: 11px;
+  opacity: 0.5;          /* 未接続時は薄く表示 */
+  transition: opacity 0.3s;
+}
+.obd-debug-panel.obd-debug-active {
+  opacity: 1;
+  border-color: var(--blue);
 }
 .obd-debug-title {
   color: var(--blue);
