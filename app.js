@@ -208,7 +208,7 @@
   const DEFAULT_SETTINGS = {
     obdMode: 'double',          // 'single' | 'double'
     obdAutoReconnect: 'on',     // 'on' | 'off'
-    bmwExt: 'on',               // 'on' | 'off' — BMW Mini F56: Mode 22 拡張 PID を使う
+    bmwExt: 'off',              // 'on' | 'off' — Mode 22 拡張 PID (UniCarScan 非対応のため既定 OFF)
     pids: {
       rpm:      true,
       coolant:  true,
@@ -964,31 +964,16 @@
       rxChar.removeEventListener('characteristicvaluechanged', bleOnData);
       rxChar.addEventListener('characteristicvaluechanged', bleOnData);
 
-      // ELM327 初期化シーケンス（BMW Mini F56 専用）
+      // ELM327 初期化シーケンス — GT_DASH と完全一致 (Mini F56 で動作確認済)
       _sendQueue = []; _sendBusy = false;
       await bleSleep(500);
 
-      bleSend('ATZ');     await bleSleep(2000);  // リセット完了まで待機
-      bleSend('ATE0');    await bleSleep(500);   // echo off
-      bleSend('ATL0');    await bleSleep(300);   // linefeed off
-      bleSend('ATS0');    await bleSleep(300);   // spaces off
-      bleSend('ATH0');    await bleSleep(300);   // headers off
-      bleSend('ATST FF'); await bleSleep(400);   // OBD タイムアウト最大
-      bleSend('ATSP6');   await bleSleep(500);   // ISO 15765-4 CAN 11-bit 500kbaud (BMW 固定)
-
-      // ──── BMW Mini F56 専用ルーティング ────────────────────────
-      // BMW は CAN バス上に複数 ECU (DME=エンジン, EGS=ミッション,
-      // KOMBI=メーター 等) があり、ブロードキャスト (7DF) すると
-      // 全 ECU が応答 → 86% が STOPPED ノイズになっていた。
-      //
-      // ATSH 7E0  : エンジン ECU (DME) に直接クエリ
-      // ATCRA 7E8 : エンジン ECU 応答 (7E8) のみ受信フィルタ
-      // → 受信ノイズが消え、パース率 13% → ほぼ 100% に向上。
-      bleSend('ATSH 7E0');  await bleSleep(400);
-      bleSend('ATCRA 7E8'); await bleSleep(400);
-      // ──────────────────────────────────────────────────────────
-
-      bleSend('0100');     await bleSleep(800);  // 通信確認 (DME 応答チェック)
+      bleSend('ATZ'); await bleSleep(1600);
+      // ATST FF: ELM327 タイムアウトを最大(約4秒)に設定 → 勝手な切断を防ぐ
+      for (const cmd of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATST FF', 'ATSP0']) {
+        bleSend(cmd);
+        await bleSleep(400);
+      }
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1526,18 +1511,16 @@
   }
 
   function nextPids() {
-    // RPM を 2 回入れて優先（更新頻度を 2 倍に）
-    const pids = [];
-    for (const p of ACTIVE_PIDS_FAST) pids.push(p);
+    // GT_DASH と同じ: FAST PIDs + SLOW PIDs 1 個ずつローテーション
+    const pids = [...ACTIVE_PIDS_FAST];
     if (ACTIVE_PIDS_SLOW.length > 0) {
       pids.push(ACTIVE_PIDS_SLOW[_slowIdx % ACTIVE_PIDS_SLOW.length]);
       _slowIdx++;
     }
-    for (const p of ACTIVE_PIDS_FAST) pids.push(p);
     return pids;
   }
 
-  // 20ms 間隔で 1 PID 送信。応答待ち中は何もしない（更新速度を上げるため）
+  // 50ms 間隔で 1 PID 送信。応答待ち中は何もしない (GT_DASH と同じ)
   function bleStartPolling() {
     recomputeActivePids();
     pollState.active   = true;
@@ -1551,17 +1534,16 @@
       }
       if (pollState.waiting) return;
       if (!pollState.pidQueue.length) pollState.pidQueue = nextPids();
-      if (!pollState.pidQueue.length) return;  // PIDが何も選択されていない
+      if (!pollState.pidQueue.length) return;
       pollState.curPid  = pollState.pidQueue.shift();
       pollState.waiting = true;
       bleSend(pollState.curPid);
-      // 300ms 応答なければ諦めて次へ（STOPPED 応答は普通 100ms 程度で返るため）
       _timeoutTimer = setTimeout(() => {
         pollState.buf     = '';
         pollState.waiting = false;
         _consecutiveTimeouts++;
-      }, 300);
-    }, 20);
+      }, 500);
+    }, 50);
   }
 
   function bleStopPolling() {
@@ -1602,26 +1584,6 @@
     state.obd.lastUpdateMs = Date.now();
     _lastDataAt            = Date.now();
     _consecutiveTimeouts   = 0;
-
-    // 「?」応答検出：プロトコル未設定状態を意味するため再初期化を試みる。
-    // ATSP6 を再送して CAN プロトコルを強制セット。
-    if (raw.includes('?') && !raw.match(/4[0-9A-F]/i)) {
-      _questionCount = (_questionCount || 0) + 1;
-      if (_questionCount >= 5 && pollState.active && !_protoReinitInProgress) {
-        _questionCount = 0;
-        _protoReinitInProgress = true;
-        bleStopPolling();
-        // プロトコル再設定
-        bleSend('ATSP6');
-        setTimeout(() => {
-          if (state.obd.connected) bleStartPolling();
-          _protoReinitInProgress = false;
-        }, 1000);
-        return;
-      }
-    } else {
-      _questionCount = 0;
-    }
 
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
