@@ -1610,7 +1610,11 @@
     if (OBD_NOISE.some(n => s.includes(n))) {
       if (s.includes('STOPPED') || s.includes('BUSBUSY') || s.includes('UNABLE')) {
         _stoppedCount++;
-        if (_stoppedCount >= STOPPED_BACKOFF && pollState.active) {
+        // バックオフ条件：STOPPED が多数 かつ 30 秒以上パース成功なし
+        // BMW は複数 ECU から STOPPED と有効データが混在するため、
+        // データが取れている間はバックオフを発動しない
+        const noRecentData = (Date.now() - _lastOkParseAt) > NO_DATA_BACKOFF_MS;
+        if (_stoppedCount >= STOPPED_BACKOFF && noRecentData && pollState.active) {
           _stoppedCount = 0;
           // ポーリング 3 秒停止 → ATSP0 再送 → ポーリング再開
           bleStopPolling();
@@ -1638,30 +1642,30 @@
       if (pid === '010C' && v.length >= 4) {
         // RPM = ((A*256) + B) / 4
         state.obd.rpm = (parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16)) >> 2;
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       } else if (pid === '0105' && v.length >= 2) {
         state.obd.coolant = parseInt(v.slice(0, 2), 16) - 40;
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       } else if (pid === '015C' && v.length >= 2) {
         state.obd.oiltemp = parseInt(v.slice(0, 2), 16) - 40;
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       } else if (pid === '010F' && v.length >= 2) {
         state.obd.intake = parseInt(v.slice(0, 2), 16) - 40;
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       } else if (pid === '0111' && v.length >= 2) {
         state.obd.throttle = Math.round(parseInt(v.slice(0, 2), 16) / 255 * 100);
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       } else if (pid === '010B' && v.length >= 2) {
         // MAP (Manifold Absolute Pressure) [kPa] = A
         // Boost [kg/cm²] = (MAP - 大気圧101.325) / 98.0665
         state.obd.mapKpa = parseInt(v.slice(0, 2), 16);
         state.obd.boost  = (state.obd.mapKpa - 101.325) / 98.0665;
-        _dbgOkCount++;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       }
     } catch (e) {
@@ -2060,7 +2064,9 @@
   let _watchdogTimer  = null;
   // STOPPED 連続カウント — プロトコル検出失敗・車両不応答の自動検出
   let _stoppedCount  = 0;
-  const STOPPED_BACKOFF = 15;  // 15 連続で自動リカバリー試行
+  const STOPPED_BACKOFF = 30;  // STOPPED が 30 連続
+  let _lastOkParseAt = 0;      // 最後にパース成功した時刻
+  const NO_DATA_BACKOFF_MS = 30000;  // かつ 30 秒間パース成功なし → バックオフ発動
   let _keepAliveTimer = null;
   let _reconnecting   = false;
 
