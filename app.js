@@ -974,9 +974,13 @@
       bleSend('ATH0');   await bleSleep(400);   // headers off
       bleSend('ATST FF'); await bleSleep(500);  // OBD タイムアウト最大
 
-      // ATSP0 (自動プロトコル検出) は BMW CAN バス検出で最大 2 秒必要。
-      // 500ms では検出完了前にポーリング開始 → STOPPED → ? の連鎖になる。
-      bleSend('ATSP0');  await bleSleep(2500);
+      // BMW Mini F56 JCW は ISO 15765-4 CAN 11-bit 500kbaud で確定。
+      // ATSP0 (自動検出) はバスが静かなとき STOPPED 状態に陥り、
+      // その後のコマンドが「?」(プロトコル未設定) になるため、
+      // ATSP6 で明示指定してプロトコル確定状態にする。
+      bleSend('ATSP6');  await bleSleep(800);
+      // 念のため通信確認 (0100 = サポート PID 問い合わせ)
+      bleSend('0100');   await bleSleep(800);
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1587,6 +1591,26 @@
     _lastDataAt            = Date.now();
     _consecutiveTimeouts   = 0;
 
+    // 「?」応答検出：プロトコル未設定状態を意味するため再初期化を試みる。
+    // ATSP6 を再送して CAN プロトコルを強制セット。
+    if (raw.includes('?') && !raw.match(/4[0-9A-F]/i)) {
+      _questionCount = (_questionCount || 0) + 1;
+      if (_questionCount >= 5 && pollState.active && !_protoReinitInProgress) {
+        _questionCount = 0;
+        _protoReinitInProgress = true;
+        bleStopPolling();
+        // プロトコル再設定
+        bleSend('ATSP6');
+        setTimeout(() => {
+          if (state.obd.connected) bleStartPolling();
+          _protoReinitInProgress = false;
+        }, 1000);
+        return;
+      }
+    } else {
+      _questionCount = 0;
+    }
+
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
       .filter(l => l.length > 3);
@@ -2069,6 +2093,9 @@
   let _lastOkParseAt = 0;
   // 加えて 30 秒以上パース成功なし、の場合のみ発動
   const NO_DATA_BACKOFF_MS = 30000;
+  // 「?」応答カウンタ：5 回連続で ATSP6 再送
+  let _questionCount = 0;
+  let _protoReinitInProgress = false;
   let _keepAliveTimer = null;
   let _reconnecting   = false;
 
