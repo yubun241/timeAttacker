@@ -157,6 +157,17 @@ so inaccuracies may occur depending on the environment.</div>
             <button class="seg-btn"       data-value="off">OFF</button>
           </div>
         </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">BMW 拡張 PID</div>
+            <div class="setting-desc">Mode 22 で高精度な油温・ブーストを取得（BMW Mini F系専用）</div>
+          </div>
+          <div class="seg-toggle" data-key="bmwExt">
+            <button class="seg-btn active" data-value="on">ON</button>
+            <button class="seg-btn"       data-value="off">OFF</button>
+          </div>
+        </div>
       </div>
 
       <!-- ── 取得項目 ─────────────────────────── -->
@@ -347,10 +358,12 @@ so inaccuracies may occur depending on the environment.</div>
         <!-- OBD デバッグパネル（接続後に表示） -->
         <div class="obd-debug-panel" id="obd-debug-panel" style="display:none">
           <div class="obd-debug-title">▸ OBD DEBUG</div>
+          <div class="obd-debug-row"><span>接続状態</span><span id="dbg-status" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>最終受信 raw</span><span id="dbg-raw" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>受信カウント</span><span id="dbg-count" class="dbg-val">0</span></div>
           <div class="obd-debug-row"><span>パース成功</span><span id="dbg-ok" class="dbg-val">0</span></div>
           <div class="obd-debug-row"><span>タイムアウト</span><span id="dbg-timeout" class="dbg-val">0</span></div>
+          <div class="obd-debug-row"><span>STOPPED 連続</span><span id="dbg-stopped" class="dbg-val">0</span></div>
           <div class="obd-debug-row"><span>RPM</span><span id="dbg-rpm" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>Coolant</span><span id="dbg-coolant" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>Oil</span><span id="dbg-oil" class="dbg-val">--</span></div>

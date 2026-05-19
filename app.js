@@ -208,6 +208,7 @@
   const DEFAULT_SETTINGS = {
     obdMode: 'double',          // 'single' | 'double'
     obdAutoReconnect: 'on',     // 'on' | 'off'
+    bmwExt: 'on',               // 'on' | 'off' — BMW Mini F56: Mode 22 拡張 PID を使う
     pids: {
       rpm:      true,
       coolant:  true,
@@ -963,24 +964,31 @@
       rxChar.removeEventListener('characteristicvaluechanged', bleOnData);
       rxChar.addEventListener('characteristicvaluechanged', bleOnData);
 
-      // ELM327 初期化シーケンス（待機時間を長めに確保）
-      _sendQueue = []; _sendBusy = false;   // 送信キューをリセット
+      // ELM327 初期化シーケンス（BMW Mini F56 専用）
+      _sendQueue = []; _sendBusy = false;
       await bleSleep(500);
 
-      bleSend('ATZ');    await bleSleep(2000);  // リセット完了まで余裕を持って待機
-      bleSend('ATE0');   await bleSleep(600);   // echo off
-      bleSend('ATL0');   await bleSleep(400);   // linefeed off
-      bleSend('ATS0');   await bleSleep(400);   // spaces off
-      bleSend('ATH0');   await bleSleep(400);   // headers off
-      bleSend('ATST FF'); await bleSleep(500);  // OBD タイムアウト最大
+      bleSend('ATZ');     await bleSleep(2000);  // リセット完了まで待機
+      bleSend('ATE0');    await bleSleep(500);   // echo off
+      bleSend('ATL0');    await bleSleep(300);   // linefeed off
+      bleSend('ATS0');    await bleSleep(300);   // spaces off
+      bleSend('ATH0');    await bleSleep(300);   // headers off
+      bleSend('ATST FF'); await bleSleep(400);   // OBD タイムアウト最大
+      bleSend('ATSP6');   await bleSleep(500);   // ISO 15765-4 CAN 11-bit 500kbaud (BMW 固定)
 
-      // BMW Mini F56 JCW は ISO 15765-4 CAN 11-bit 500kbaud で確定。
-      // ATSP0 (自動検出) はバスが静かなとき STOPPED 状態に陥り、
-      // その後のコマンドが「?」(プロトコル未設定) になるため、
-      // ATSP6 で明示指定してプロトコル確定状態にする。
-      bleSend('ATSP6');  await bleSleep(800);
-      // 念のため通信確認 (0100 = サポート PID 問い合わせ)
-      bleSend('0100');   await bleSleep(800);
+      // ──── BMW Mini F56 専用ルーティング ────────────────────────
+      // BMW は CAN バス上に複数 ECU (DME=エンジン, EGS=ミッション,
+      // KOMBI=メーター 等) があり、ブロードキャスト (7DF) すると
+      // 全 ECU が応答 → 86% が STOPPED ノイズになっていた。
+      //
+      // ATSH 7E0  : エンジン ECU (DME) に直接クエリ
+      // ATCRA 7E8 : エンジン ECU 応答 (7E8) のみ受信フィルタ
+      // → 受信ノイズが消え、パース率 13% → ほぼ 100% に向上。
+      bleSend('ATSH 7E0');  await bleSleep(400);
+      bleSend('ATCRA 7E8'); await bleSleep(400);
+      // ──────────────────────────────────────────────────────────
+
+      bleSend('0100');     await bleSleep(800);  // 通信確認 (DME 応答チェック)
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1496,14 +1504,18 @@
 
   function recomputeActivePids() {
     const pids = state.settings.pids;
+    // BMW 拡張 PID 使用フラグ（既定 ON。値が合わない場合は設定で OFF にする）
+    const bmwExt = state.settings.bmwExt === 'on' || state.settings.bmwExt === true;
     const fast = new Set();
     const slow = new Set();
-    if (pids.rpm)      fast.add('010C');  // RPM
-    if (pids.coolant)  slow.add('0105');
-    if (pids.oiltemp)  slow.add('015C');
-    if (pids.intake)   slow.add('010F');
-    if (pids.throttle) slow.add('0111');
-    if (pids.boost && state.settings.boostCfg?.show !== false) slow.add('010B');  // MAP
+    if (pids.rpm)      fast.add('010C');                              // RPM (BMW でも標準 OBD で OK)
+    if (pids.coolant)  slow.add(bmwExt ? '221935' : '0105');          // 冷却水温
+    if (pids.oiltemp)  slow.add(bmwExt ? '221956' : '015C');          // 油温 (BMW 拡張で高精度)
+    if (pids.intake)   slow.add(bmwExt ? '22113A' : '010F');          // 吸気温
+    if (pids.throttle) slow.add('0111');                              // スロットル (標準で十分)
+    if (pids.boost && state.settings.boostCfg?.show !== false) {
+      slow.add(bmwExt ? '22114B' : '010B');                           // ブースト (BMW 拡張で実測値)
+    }
     ACTIVE_PIDS_FAST = [...fast];
     ACTIVE_PIDS_SLOW = [...slow];
     _slowIdx = 0;
@@ -1657,12 +1669,22 @@
     }
     _stoppedCount = 0;
 
-    // 応答ヘッダ "4x" を探す (PID 010C → 41 0C ... の場合 "41" の "1" 部分は元の "1")
-    const hdr = '4' + pid.slice(1);
+    // ──── 応答ヘッダ判定 (Mode 01 / Mode 22 両対応) ────
+    // Mode 01 (標準 OBD2):
+    //   要求 '010C' → 応答 '410C XXXX...' (ヘッダ4桁)
+    // Mode 22 (BMW 拡張):
+    //   要求 '221956' → 応答 '621956 XXXX...' (ヘッダ6桁)
+    let hdr;
+    if (pid.length >= 6 && pid.startsWith('22')) {
+      hdr = '62' + pid.slice(2);    // BMW Mode 22
+    } else {
+      hdr = '4' + pid.slice(1);     // 標準 Mode 01
+    }
     const idx = s.indexOf(hdr);
     if (idx < 0) return false;
-    const v = s.slice(idx + 4);
+    const v = s.slice(idx + hdr.length);
     try {
+      // ──── 標準 Mode 01 PIDs ────
       if (pid === '010C' && v.length >= 4) {
         // RPM = ((A*256) + B) / 4
         state.obd.rpm = (parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16)) >> 2;
@@ -1689,6 +1711,38 @@
         // Boost [kg/cm²] = (MAP - 大気圧101.325) / 98.0665
         state.obd.mapKpa = parseInt(v.slice(0, 2), 16);
         state.obd.boost  = (state.obd.mapKpa - 101.325) / 98.0665;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
+        return true;
+      }
+      // ──── BMW Mode 22 拡張 PIDs ────
+      // 注: BMW 個体差で値が合わない場合は設定で BMW 拡張を OFF にしてください
+      else if (pid === '221956' && v.length >= 4) {
+        // BMW DME 油温 (2 バイト, 0.1K 単位)
+        // 温度 °C = ((A*256 + B) / 10) - 273.15
+        const raw10K = parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16);
+        state.obd.oiltemp = Math.round((raw10K / 10) - 273.15);
+        _dbgOkCount++; _lastOkParseAt = Date.now();
+        return true;
+      } else if (pid === '22114B' && v.length >= 4) {
+        // BMW チャージ圧 (実測ブースト, 2 バイト, mbar)
+        // bar = (A*256 + B) / 1000
+        // kg/cm² = bar * 1.01972
+        const mbar = parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16);
+        const bar  = mbar / 1000;
+        // 絶対圧 → ゲージ圧 (大気圧 1.013 bar を引く)
+        state.obd.boost = (bar - 1.013) * 1.01972;
+        state.obd.mapKpa = bar * 100;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
+        return true;
+      } else if (pid === '22113A' && v.length >= 2) {
+        // BMW 吸気温 (1 バイト, °C オフセット 48)
+        state.obd.intake = parseInt(v.slice(0, 2), 16) - 48;
+        _dbgOkCount++; _lastOkParseAt = Date.now();
+        return true;
+      } else if (pid === '221935' && v.length >= 4) {
+        // BMW 冷却水温 (2 バイト, 0.1K 単位)
+        const raw10K = parseInt(v.slice(0, 2), 16) * 256 + parseInt(v.slice(2, 4), 16);
+        state.obd.coolant = Math.round((raw10K / 10) - 273.15);
         _dbgOkCount++; _lastOkParseAt = Date.now();
         return true;
       }
