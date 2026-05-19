@@ -1510,15 +1510,18 @@
   }
 
   function nextPids() {
-    const pids = [...ACTIVE_PIDS_FAST];
+    // RPM を 2 回入れて優先（更新頻度を 2 倍に）
+    const pids = [];
+    for (const p of ACTIVE_PIDS_FAST) pids.push(p);
     if (ACTIVE_PIDS_SLOW.length > 0) {
       pids.push(ACTIVE_PIDS_SLOW[_slowIdx % ACTIVE_PIDS_SLOW.length]);
       _slowIdx++;
     }
+    for (const p of ACTIVE_PIDS_FAST) pids.push(p);
     return pids;
   }
 
-  // 50ms 間隔で 1 PID 送信。応答待ち中は何もしない
+  // 20ms 間隔で 1 PID 送信。応答待ち中は何もしない（更新速度を上げるため）
   function bleStartPolling() {
     recomputeActivePids();
     pollState.active   = true;
@@ -1536,13 +1539,13 @@
       pollState.curPid  = pollState.pidQueue.shift();
       pollState.waiting = true;
       bleSend(pollState.curPid);
-      // 500ms 応答なければ諦めて次へ
+      // 300ms 応答なければ諦めて次へ（STOPPED 応答は普通 100ms 程度で返るため）
       _timeoutTimer = setTimeout(() => {
         pollState.buf     = '';
         pollState.waiting = false;
         _consecutiveTimeouts++;
-      }, 500);
-    }, 50);
+      }, 300);
+    }, 20);
   }
 
   function bleStopPolling() {
@@ -1610,21 +1613,18 @@
     if (OBD_NOISE.some(n => s.includes(n))) {
       if (s.includes('STOPPED') || s.includes('BUSBUSY') || s.includes('UNABLE')) {
         _stoppedCount++;
-        // バックオフ条件：STOPPED が多数 かつ 30 秒以上パース成功なし
-        // BMW は複数 ECU から STOPPED と有効データが混在するため、
-        // データが取れている間はバックオフを発動しない
+        // バックオフ条件：100 連続 STOPPED かつ 30 秒以上パース成功なし。
+        // BMW は通常運用でも全応答の 86% が STOPPED（サポート外 PID への
+        // 正常応答）のため、閾値は十分高く取る。
+        // ATSP0 再送は ELM327 を逆に混乱させるので行わず、
+        // ポーリングを 4 秒止めて再開するだけにする（軽い揺さぶり）。
         const noRecentData = (Date.now() - _lastOkParseAt) > NO_DATA_BACKOFF_MS;
         if (_stoppedCount >= STOPPED_BACKOFF && noRecentData && pollState.active) {
           _stoppedCount = 0;
-          // ポーリング 3 秒停止 → ATSP0 再送 → ポーリング再開
           bleStopPolling();
-          toast('OBD 再試行... イグニッション ON を確認してください');
           setTimeout(() => {
-            if (state.obd.connected) {
-              bleSend('ATSP0');
-              setTimeout(() => bleStartPolling(), 2500);
-            }
-          }, 3000);
+            if (state.obd.connected) bleStartPolling();
+          }, 4000);
         }
       } else {
         _stoppedCount = 0;
@@ -2064,9 +2064,11 @@
   let _watchdogTimer  = null;
   // STOPPED 連続カウント — プロトコル検出失敗・車両不応答の自動検出
   let _stoppedCount  = 0;
-  const STOPPED_BACKOFF = 30;  // STOPPED が 30 連続
-  let _lastOkParseAt = 0;      // 最後にパース成功した時刻
-  const NO_DATA_BACKOFF_MS = 30000;  // かつ 30 秒間パース成功なし → バックオフ発動
+  // 100 連続 STOPPED で軽い再試行（BMW は通常 86% が STOPPED のため閾値は高く取る）
+  const STOPPED_BACKOFF = 100;
+  let _lastOkParseAt = 0;
+  // 加えて 30 秒以上パース成功なし、の場合のみ発動
+  const NO_DATA_BACKOFF_MS = 30000;
   let _keepAliveTimer = null;
   let _reconnecting   = false;
 
