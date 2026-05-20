@@ -3304,8 +3304,13 @@
       ctx.fillText('R', cx + r + 8, cy);
 
       // Dot position
+      // ── 縦軸: "物理ボール" 慣習 (ユウぶん様の好み) ───────────
+      //   前進加速 (lon_g > 0) → ボール下方向 (B 側へ転がる)
+      //   ブレーキ (lon_g < 0) → ボール上方向 (F 側へ転がる)
+      //   = 慣性で重心が移動する方向 = ダッシュに置いたボールの挙動
+      // 横軸は従来通り (右G で右へ、左G で左へ)
       let bx = cx + (lat_g / G_RANGE) * r;
-      let by = cy - (lon_g / G_RANGE) * r;
+      let by = cy + (lon_g / G_RANGE) * r;   // ← 符号反転 (- → +)
       const dx = bx - cx, dy = by - cy;
       const d = Math.sqrt(dx * dx + dy * dy);
       if (d > r - dot) {
@@ -3441,10 +3446,11 @@
   //   +Y: phone up     → world up   (gravity axis, mostly +9.81 m/s²)
   //   +Z: out of screen → toward driver → toward REAR of car (longitudinal)
   //
-  // Display mapping (motion-direction convention):
+  // Display mapping (物理ボール慣習: 慣性で重心が移動する方向に転がる):
   //   lat_g = +X / g    → ball moves right (R) on lateral right accel
-  //   lon_g = −Z / g    → ball moves up (F) on forward accel
-  //                       (Z is negated because car forward = phone −Z)
+  //   lon_g = −Z / g    → 前進加速で下方向 (B 側) に転がる
+  //                       ブレーキで上方向 (F 側) に転がる
+  //                       (描画側で by = cy + lon_g として実現)
   //
   // EMA smoothing applied to suppress accelerometer noise.
   // α = 0.15 → ~7-sample (≈70 ms at 100 Hz) effective time constant.
