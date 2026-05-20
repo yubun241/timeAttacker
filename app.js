@@ -1599,33 +1599,14 @@
       .filter(l => l.length > 3);
 
     if (lines.length > 0) {
-      // 応答ヘッダ "41XX" から実際の PID を自動検出
-      // (BMW 複数 ECU + BLE チャンク分割 + 応答遅延で
-      //  curPid と実際の応答 PID が一致しないケースを救済)
-      // 1 行に複数 PID が混在することもあるため、検出した全ての PID を解析する
-      const RESP_TO_PID = {
-        '410C': '010C', '4105': '0105', '415C': '015C',
-        '410F': '010F', '4111': '0111', '410B': '010B',
-        '410D': '010D'
-      };
+      // GT_DASH 完全同一: curPid だけで解析 (auto-detect を撤回)
+      // auto-detect は応答 race を悪化させていた。GT_DASH の素直な実装に戻す。
+      const pid = pollState.curPid;
       const mode = state.settings.obdMode;
-      const tryParse = (line) => {
-        const upper = line.replace(/[\s>]/g, '').toUpperCase();
-        let any = false;
-        // 検出した全ヘッダを解析（1 行に複数 PID 混在対応）
-        for (const [hdr, p] of Object.entries(RESP_TO_PID)) {
-          if (upper.includes(hdr)) {
-            if (parseObdLine(p, line)) any = true;
-          }
-        }
-        // どのヘッダもマッチしない場合は curPid でフォールバック
-        if (!any) return parseObdLine(pollState.curPid, line);
-        return any;
-      };
       if (mode === 'single') {
-        for (const l of lines) { if (tryParse(l)) break; }
+        for (const l of lines) { if (parseObdLine(pid, l)) break; }
       } else {
-        for (const l of lines) tryParse(l);
+        for (const l of lines) parseObdLine(pid, l);
       }
     }
   }
