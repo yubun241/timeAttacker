@@ -1579,7 +1579,7 @@
     if (_timeoutTimer) { clearTimeout(_timeoutTimer);  _timeoutTimer = null; }
   }
 
-  // notify ハンドラ — 受信データをバッファに蓄積し、'>' で1応答完了として処理
+  // notify ハンドラ — 受信データをバッファに蓄積し、応答PIDを照合して polling 状態を更新
   function bleOnData(event) {
     let chunk = '';
     try {
@@ -1592,15 +1592,12 @@
       pollState.waiting = false;
       return;
     }
-    // GT_DASH と同じ条件: '>' があるか、または非空行が1行以上あれば処理
+    // '>' があるか、または非空行が1行以上あれば処理
     // BLE は応答が複数チャンクに分割されることがあり、'>'を待つと取りこぼす
     if (!pollState.buf.includes('>') &&
         pollState.buf.split('\r').filter(x => x.trim()).length < 1) return;
-    clearTimeout(_timeoutTimer);
     const raw = pollState.buf;
     pollState.buf = '';
-    pollState.waiting = false;
-    _consecutiveTimeouts = 0;
     _lastDataAt = Date.now();
     if (!state.obd.connected) return;
 
@@ -1618,17 +1615,59 @@
       .map(l => l.replace(/[\n>]/g, '').trim())
       .filter(l => l.length > 3);
 
+    // ───────────────────────────────────────────────────────────
+    // 応答相関 (response correlation) — ハングアップ防止の核心ロジック
+    //
+    // BMW Mini は複数 ECU 同時応答 + BLE チャンク分割で
+    // 「前のPIDの遅延応答」が「現在ポーリング中のPID」の窓に紛れ込む。
+    // 無条件に waiting=false にすると、遅延応答を本物の応答と誤認し
+    // 次の PID を送る → 本物の応答が次の PID の窓に流れ込む
+    // → 同期外れの連鎖でハングアップする。
+    //
+    // 対策:
+    //   1. 応答ヘッダ "41XX" から実際の PID を自動検出して全行を解析
+    //      (遅延応答もデータとして捕捉、取りこぼし防止)
+    //   2. ただし waiting=false / timer 解除は curPid に対する応答が
+    //      含まれていた時のみ実施 (polling state を本物の応答だけで進行)
+    //   3. 該当応答が来なければタイムアウト(500ms)で進行 (デッドロック防止)
+    // ───────────────────────────────────────────────────────────
+    const RESP_TO_PID = {
+      '410C': '010C', '4105': '0105', '415C': '015C',
+      '410F': '010F', '4111': '0111', '410B': '010B',
+      '410D': '010D'
+    };
+    let curPidAnswered = false;
+    const curPid = pollState.curPid;
+
     if (lines.length > 0) {
-      // GT_DASH 完全同一: curPid だけで解析 (auto-detect を撤回)
-      // auto-detect は応答 race を悪化させていた。GT_DASH の素直な実装に戻す。
-      const pid = pollState.curPid;
       const mode = state.settings.obdMode;
-      if (mode === 'single') {
-        for (const l of lines) { if (parseObdLine(pid, l)) break; }
-      } else {
-        for (const l of lines) parseObdLine(pid, l);
+      for (const line of lines) {
+        const upper = line.replace(/[\s>]/g, '').toUpperCase();
+        let parsedAny = false;
+        // 含まれる全ての既知ヘッダで解析 (1 行に複数 PID 混在対応)
+        for (const [hdr, p] of Object.entries(RESP_TO_PID)) {
+          if (upper.includes(hdr)) {
+            if (parseObdLine(p, line)) {
+              parsedAny = true;
+              if (p === curPid) curPidAnswered = true;
+            }
+          }
+        }
+        // 既知ヘッダが無ければ curPid でフォールバック
+        if (!parsedAny) {
+          if (parseObdLine(curPid, line)) curPidAnswered = true;
+        }
+        if (mode === 'single' && curPidAnswered) break;
       }
     }
+
+    // ★ ここがハングアップ防止の肝: curPid の応答が含まれていた時だけ進行
+    if (curPidAnswered) {
+      clearTimeout(_timeoutTimer);
+      pollState.waiting = false;
+      _consecutiveTimeouts = 0;
+    }
+    // curPid 応答が無ければ waiting を維持 → タイムアウトで進行
   }
 
   // PID 別パース (GT_DASH の parseLine と完全一致)
