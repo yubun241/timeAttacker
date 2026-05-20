@@ -218,10 +218,11 @@
       boost:    true,           // PID 010B (MAP) — 横画面 BOOST バー用
     },
     // 横画面ダッシュボード設定（GT_DASH 互換）
+    // Mini F56 JCW Automatic (6-speed Aisin Steptronic Sports) — BMW Group 公式スペック
     vehicle: {
       finalDrive:  3.502,
       tireDiamMm:  616,
-      gearRatios:  [4.459, 2.508, 1.556, 1.142, 0.851, 0.672],
+      gearRatios:  [4.459, 2.508, 1.555, 1.142, 0.851, 0.672],
       tolerancePct: 10,
       hysteresis:   2,
       minSpeed:     4,
@@ -346,7 +347,8 @@
       // CSV と同じ順序のカラム定義
       columns: [
         'iso_time','lat','lon','acc','speed_kmh','lap','sector','g_lat','g_lon',
-        'rpm','coolant','oilTemp','intake','throttle'
+        'rpm','coolant','oilTemp','intake','throttle',
+        'boost_kgcm2','map_kpa','gear'
       ],
       rows: state.csvRows.slice(),  // shallow copy
     };
@@ -692,6 +694,23 @@
     toast('設定を保存しました');
     showScreen('home');
   });
+
+  // 車両設定を Mini F56 JCW Automatic デフォルトに戻す (保存はせず UI のみリセット)
+  // BMW Group 公式スペック (2014/12 プレスリリース) 6-speed Aisin Steptronic Sports
+  const _btnResetVehicle = document.getElementById('btn-reset-vehicle');
+  if (_btnResetVehicle) {
+    _btnResetVehicle.addEventListener('click', () => {
+      document.getElementById('cfg-final-drive').value = 3.502;
+      document.getElementById('cfg-tire-diam').value   = 616;
+      const JCW_AT_RATIOS = [4.459, 2.508, 1.555, 1.142, 0.851, 0.672];
+      for (let i = 1; i <= 6; i++) {
+        const el = document.getElementById('cfg-gear-' + i);
+        if (el) el.value = JCW_AT_RATIOS[i - 1];
+      }
+      document.getElementById('cfg-gear-tol').value = 10;
+      toast('Mini F56 JCW AT デフォルトに戻しました（保存ボタンで確定）');
+    });
+  }
 
   // ============================================================
   // BLE / OBD2 接続 (Phase 1: 接続のみ。PID 取得は Phase 2)
@@ -1444,6 +1463,7 @@
       'ISO_TIME', 'LAT', 'LON', 'ACC_M', 'SPEED_KMH',
       'LAP', 'SECTOR', 'G_LAT', 'G_LON',
       'RPM', 'COOLANT_C', 'OIL_TEMP_C', 'INTAKE_C', 'THROTTLE_PCT',
+      'BOOST_KGCM2', 'MAP_KPA', 'GEAR',
     ];
     const lines = [header.join(',')].concat(s.rows.map(r => r.join(',')));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
@@ -2948,6 +2968,10 @@
         obdStr(state.obd.oiltemp),
         obdStr(state.obd.intake),
         obdStr(state.obd.throttle),
+        // ── 拡張カラム: boost (kg/cm²) / MAP (kPa) / ギア ────
+        state.obd.boost  != null ? state.obd.boost.toFixed(3)  : '',
+        state.obd.mapKpa != null ? state.obd.mapKpa.toFixed(1) : '',
+        state.gear || '',
       ]);
     }
 
