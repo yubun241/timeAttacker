@@ -1520,9 +1520,8 @@ body.landscape .screen.active { background: #000; }
 .land-lap-box {
   background: #fff;
   border: none;
-  padding: 8px 12px;
-  align-items: flex-start;
-  justify-content: flex-start;   /* ← 上端基準に変更 */
+  padding: 6px 12px;
+  /* align-items / justify-content は親 .land-box から継承 (center) */
 }
 .land-lap-lbl {
   font-style: italic;
@@ -1531,8 +1530,8 @@ body.landscape .screen.active { background: #000; }
   font-size: clamp(14px, 1.9vw, 20px);
   text-align: left;
   width: 100%;
-  margin-top: 0;                  /* ← 10px → 0 (下にずれる原因)*/
-  margin-bottom: 4px;             /* 数値との間隔 */
+  /* margin-top は削除 (元は 10px → 中身が下に押し下げられていた) */
+  margin-bottom: 2px;
 }
 .land-lap-num {
   font-family: Roboto, -apple-system, BlinkMacSystemFont, Arial, sans-serif;

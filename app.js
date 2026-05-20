@@ -1602,6 +1602,7 @@
       // 応答ヘッダ "41XX" から実際の PID を自動検出
       // (BMW 複数 ECU + BLE チャンク分割 + 応答遅延で
       //  curPid と実際の応答 PID が一致しないケースを救済)
+      // 1 行に複数 PID が混在することもあるため、検出した全ての PID を解析する
       const RESP_TO_PID = {
         '410C': '010C', '4105': '0105', '415C': '015C',
         '410F': '010F', '4111': '0111', '410B': '010B',
@@ -1610,14 +1611,16 @@
       const mode = state.settings.obdMode;
       const tryParse = (line) => {
         const upper = line.replace(/[\s>]/g, '').toUpperCase();
-        // 応答に含まれる既知ヘッダで PID を判定
+        let any = false;
+        // 検出した全ヘッダを解析（1 行に複数 PID 混在対応）
         for (const [hdr, p] of Object.entries(RESP_TO_PID)) {
           if (upper.includes(hdr)) {
-            return parseObdLine(p, line);
+            if (parseObdLine(p, line)) any = true;
           }
         }
-        // フォールバック: curPid で試行
-        return parseObdLine(pollState.curPid, line);
+        // どのヘッダもマッチしない場合は curPid でフォールバック
+        if (!any) return parseObdLine(pollState.curPid, line);
+        return any;
       };
       if (mode === 'single') {
         for (const l of lines) { if (tryParse(l)) break; }
