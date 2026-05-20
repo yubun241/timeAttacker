@@ -2371,3 +2371,34 @@ body.landscape .screen.active { background: #000; }
   color: var(--fg) !important;
   border: 1px solid var(--border) !important;
 }
+
+/* ════════════════════════════════════════════════
+   DEBUG OVERLAY (GT_DASH 互換)
+   pointer-events: none — タッチを下層 UI に透過
+   z-index: 9000 — 全てより前面
+   トグルは横画面フッタの DBG ボタンから
+════════════════════════════════════════════════ */
+#dbg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  color: #1FD060;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: clamp(9px, 1.8vw, 12px);
+  padding: 6px 10px;
+  overflow-y: auto;
+  z-index: 9000;
+  pointer-events: none;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  display: none;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+}
+#dbg-overlay.show {
+  display: block;
+}
+#land-btn-dbg.active {
+  background: var(--accent);
+  color: #000;
+}

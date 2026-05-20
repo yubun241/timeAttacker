@@ -157,17 +157,6 @@ so inaccuracies may occur depending on the environment.</div>
             <button class="seg-btn"       data-value="off">OFF</button>
           </div>
         </div>
-
-        <div class="setting-row">
-          <div class="setting-label">
-            <div class="setting-name">BMW 拡張 PID</div>
-            <div class="setting-desc">Mode 22 で高精度な油温・ブーストを取得（UniCarScan は非対応、実験用途）</div>
-          </div>
-          <div class="seg-toggle" data-key="bmwExt">
-            <button class="seg-btn"        data-value="on">ON</button>
-            <button class="seg-btn active" data-value="off">OFF</button>
-          </div>
-        </div>
       </div>
 
       <!-- ── 取得項目 ─────────────────────────── -->
@@ -367,6 +356,10 @@ so inaccuracies may occur depending on the environment.</div>
           <div class="obd-debug-row"><span>RPM</span><span id="dbg-rpm" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>Coolant</span><span id="dbg-coolant" class="dbg-val">--</span></div>
           <div class="obd-debug-row"><span>Oil</span><span id="dbg-oil" class="dbg-val">--</span></div>
+          <button id="btn-toggle-dbg-overlay" class="btn-secondary"
+                  style="margin-top:10px;width:100%;padding:8px;font-size:13px;">
+            生ログオーバーレイ表示 ON/OFF
+          </button>
         </div>
       </div>
 
@@ -737,6 +730,7 @@ so inaccuracies may occur depending on the environment.</div>
           <div class="land-state-box" id="land-state">準備中</div>
           <div class="land-footer-spacer"></div>
           <button class="land-icon-btn" id="land-btn-exit" title="戻る">‹</button>
+          <button class="land-icon-btn" id="land-btn-dbg" title="デバッグログ">DBG</button>
           <button class="land-icon-btn" id="land-btn-cfg" title="設定">CFG</button>
         </footer>
 
@@ -744,6 +738,9 @@ so inaccuracies may occur depending on the environment.</div>
 
     </main>
   </section>
+
+  <!-- ─── デバッグオーバーレイ (GT_DASH 互換) ─── -->
+  <div id="dbg-overlay"></div>
 
   <div id="toast" class="toast"></div>
 

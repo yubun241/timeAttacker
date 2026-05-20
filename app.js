@@ -786,6 +786,9 @@
   }
 
   function bleSetStatus(s) {
+    if (state.obd.status !== s && typeof dbg === 'function') {
+      dbg('[STATUS] ' + (state.obd.status || '?') + ' → ' + s);
+    }
     state.obd.status = s;
     state.obd.connected = (s === 'connected');
     // 計測中に OBD が接続されたタイミングをキャプチャ
@@ -967,6 +970,7 @@
       // ELM327 初期化シーケンス — GT_DASH と完全一致 (Mini F56 で動作確認済)
       _sendQueue = []; _sendBusy = false;
       await bleSleep(500);
+      dbg('[INIT] ELM327 init start');
 
       bleSend('ATZ'); await bleSleep(1600);
       // ATST FF: ELM327 タイムアウトを最大(約4秒)に設定 → 勝手な切断を防ぐ
@@ -974,6 +978,7 @@
         bleSend(cmd);
         await bleSleep(400);
       }
+      dbg('[INIT] complete → polling start');
 
       bleSetStatus('connected');
       toast(`OBD2 接続: ${state.obd.deviceName}`);
@@ -1489,18 +1494,16 @@
 
   function recomputeActivePids() {
     const pids = state.settings.pids;
-    // BMW 拡張 PID 使用フラグ（既定 ON。値が合わない場合は設定で OFF にする）
-    const bmwExt = state.settings.bmwExt === 'on' || state.settings.bmwExt === true;
+    // GT_DASH と完全一致: 標準 Mode 01 PIDs のみ使用
+    // (UniCarScan 2000 は Mode 22 を完全サポートしないため)
     const fast = new Set();
     const slow = new Set();
-    if (pids.rpm)      fast.add('010C');                              // RPM (BMW でも標準 OBD で OK)
-    if (pids.coolant)  slow.add(bmwExt ? '221935' : '0105');          // 冷却水温
-    if (pids.oiltemp)  slow.add(bmwExt ? '221956' : '015C');          // 油温 (BMW 拡張で高精度)
-    if (pids.intake)   slow.add(bmwExt ? '22113A' : '010F');          // 吸気温
-    if (pids.throttle) slow.add('0111');                              // スロットル (標準で十分)
-    if (pids.boost && state.settings.boostCfg?.show !== false) {
-      slow.add(bmwExt ? '22114B' : '010B');                           // ブースト (BMW 拡張で実測値)
-    }
+    if (pids.rpm)      fast.add('010C');
+    if (pids.coolant)  slow.add('0105');
+    if (pids.oiltemp)  slow.add('015C');
+    if (pids.intake)   slow.add('010F');
+    if (pids.throttle) slow.add('0111');
+    if (pids.boost && state.settings.boostCfg?.show !== false) slow.add('010B');
     ACTIVE_PIDS_FAST = [...fast];
     ACTIVE_PIDS_SLOW = [...slow];
     _slowIdx = 0;
@@ -1542,6 +1545,7 @@
         pollState.buf     = '';
         pollState.waiting = false;
         _consecutiveTimeouts++;
+        dbg('[TIMEOUT] pid=' + pollState.curPid + ' count=' + _consecutiveTimeouts);
       }, 500);
     }, 50);
   }
@@ -1568,12 +1572,16 @@
       pollState.waiting = false;
       return;
     }
-    // ELM327 はプロンプト '>' で応答完了
-    if (!pollState.buf.includes('>')) return;
+    // GT_DASH と同じ条件: '>' があるか、または非空行が1行以上あれば処理
+    // BLE は応答が複数チャンクに分割されることがあり、'>'を待つと取りこぼす
+    if (!pollState.buf.includes('>') &&
+        pollState.buf.split('\r').filter(x => x.trim()).length < 1) return;
     clearTimeout(_timeoutTimer);
     const raw = pollState.buf;
     pollState.buf = '';
     pollState.waiting = false;
+    _consecutiveTimeouts = 0;
+    _lastDataAt = Date.now();
     if (!state.obd.connected) return;
 
     // デバッグ: 受信データを記録
@@ -1581,9 +1589,10 @@
     const el = document.getElementById('dbg-raw');
     if (el) el.textContent = raw.replace(/[\r\n]/g, '↵').slice(0, 40);
 
+    // オーバーレイログ (GT_DASH 同形式: [PID] "raw")
+    dbg('[' + (pollState.curPid || '----') + '] ' + JSON.stringify(raw));
+
     state.obd.lastUpdateMs = Date.now();
-    _lastDataAt            = Date.now();
-    _consecutiveTimeouts   = 0;
 
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
@@ -1602,45 +1611,17 @@
     }
   }
 
-  // PID 別パース
+  // PID 別パース (GT_DASH の parseLine と完全一致)
   function parseObdLine(pid, raw) {
     const s = raw.replace(/[\s\r\n>]/g, '').toUpperCase();
-    if (!s) return false;
+    if (!s || OBD_NOISE.some(n => s.includes(n))) return false;
 
-    // ノイズ判定 + STOPPED 連続カウント
-    if (OBD_NOISE.some(n => s.includes(n))) {
-      if (s.includes('STOPPED') || s.includes('BUSBUSY') || s.includes('UNABLE')) {
-        _stoppedCount++;
-        // バックオフ条件：100 連続 STOPPED かつ 30 秒以上パース成功なし。
-        // BMW は通常運用でも全応答の 86% が STOPPED（サポート外 PID への
-        // 正常応答）のため、閾値は十分高く取る。
-        // ATSP0 再送は ELM327 を逆に混乱させるので行わず、
-        // ポーリングを 4 秒止めて再開するだけにする（軽い揺さぶり）。
-        const noRecentData = (Date.now() - _lastOkParseAt) > NO_DATA_BACKOFF_MS;
-        if (_stoppedCount >= STOPPED_BACKOFF && noRecentData && pollState.active) {
-          _stoppedCount = 0;
-          bleStopPolling();
-          setTimeout(() => {
-            if (state.obd.connected) bleStartPolling();
-          }, 4000);
-        }
-      } else {
-        _stoppedCount = 0;
-      }
-      return false;
-    }
-    _stoppedCount = 0;
-
-    // ──── 応答ヘッダ判定 (Mode 01 / Mode 22 両対応) ────
-    // Mode 01 (標準 OBD2):
-    //   要求 '010C' → 応答 '410C XXXX...' (ヘッダ4桁)
-    // Mode 22 (BMW 拡張):
-    //   要求 '221956' → 応答 '621956 XXXX...' (ヘッダ6桁)
+    // Mode 22 検出は残置（将来用、現状は使われない）
     let hdr;
     if (pid.length >= 6 && pid.startsWith('22')) {
-      hdr = '62' + pid.slice(2);    // BMW Mode 22
+      hdr = '62' + pid.slice(2);
     } else {
-      hdr = '4' + pid.slice(1);     // 標準 Mode 01
+      hdr = '4' + pid.slice(1);
     }
     const idx = s.indexOf(hdr);
     if (idx < 0) return false;
@@ -2118,6 +2099,54 @@
   // デバッグカウンタ
   let _dbgRxCount  = 0;
   let _dbgOkCount  = 0;
+
+  // ─── デバッグオーバーレイ (GT_DASH 互換) ───
+  // OBD 生応答や状態遷移をリアルタイムで画面前面に表示。
+  // DBG ボタンで表示 ON/OFF。表示中もタッチは下層 UI に透過する。
+  const _dbgLog = [];
+  const DBG_MAX = 60;          // 直近 60 行を保持
+  let _dbgEnabled = false;
+
+  function dbg(msg) {
+    const line = '[' + new Date().toLocaleTimeString('ja-JP', { hour12: false }) + '] ' + msg;
+    _dbgLog.push(line);
+    if (_dbgLog.length > DBG_MAX) _dbgLog.shift();
+    if (_dbgEnabled) _renderDbgOverlay();
+  }
+
+  function _renderDbgOverlay() {
+    const el = document.getElementById('dbg-overlay');
+    if (!el) return;
+    el.textContent = _dbgLog.join('\n');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function toggleDbgOverlay() {
+    _dbgEnabled = !_dbgEnabled;
+    const ol = document.getElementById('dbg-overlay');
+    const btn = document.getElementById('land-btn-dbg');
+    if (ol)  ol.classList.toggle('show', _dbgEnabled);
+    if (btn) btn.classList.toggle('active', _dbgEnabled);
+    if (_dbgEnabled) _renderDbgOverlay();
+  }
+
+  // DBG ボタンクリックでトグル (横画面 + 設定画面)
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn1 = document.getElementById('land-btn-dbg');
+    if (btn1) btn1.addEventListener('click', toggleDbgOverlay);
+    const btn2 = document.getElementById('btn-toggle-dbg-overlay');
+    if (btn2) btn2.addEventListener('click', toggleDbgOverlay);
+  });
+  // DOMContentLoaded が既に発火している場合の補完
+  setTimeout(() => {
+    ['land-btn-dbg', 'btn-toggle-dbg-overlay'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn && !btn._dbgBound) {
+        btn.addEventListener('click', toggleDbgOverlay);
+        btn._dbgBound = true;
+      }
+    });
+  }, 500);
 
   function _updateDebugPanel() {
     const panel = document.getElementById('obd-debug-panel');
