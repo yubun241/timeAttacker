@@ -1597,16 +1597,32 @@
     const lines = raw.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
       .filter(l => l.length > 3);
-    const pid = pollState.curPid;
 
     if (lines.length > 0) {
+      // 応答ヘッダ "41XX" から実際の PID を自動検出
+      // (BMW 複数 ECU + BLE チャンク分割 + 応答遅延で
+      //  curPid と実際の応答 PID が一致しないケースを救済)
+      const RESP_TO_PID = {
+        '410C': '010C', '4105': '0105', '415C': '015C',
+        '410F': '010F', '4111': '0111', '410B': '010B',
+        '410D': '010D'
+      };
       const mode = state.settings.obdMode;
+      const tryParse = (line) => {
+        const upper = line.replace(/[\s>]/g, '').toUpperCase();
+        // 応答に含まれる既知ヘッダで PID を判定
+        for (const [hdr, p] of Object.entries(RESP_TO_PID)) {
+          if (upper.includes(hdr)) {
+            return parseObdLine(p, line);
+          }
+        }
+        // フォールバック: curPid で試行
+        return parseObdLine(pollState.curPid, line);
+      };
       if (mode === 'single') {
-        // Single: 最初に解析できた行で打ち切り（単一ECU向け）
-        for (const l of lines) { if (parseObdLine(pid, l)) break; }
+        for (const l of lines) { if (tryParse(l)) break; }
       } else {
-        // Double: 全行をパース（UniCarScan + BMW など複数ECU応答向け）
-        for (const l of lines) parseObdLine(pid, l);
+        for (const l of lines) tryParse(l);
       }
     }
   }
