@@ -1532,7 +1532,8 @@
     return pids;
   }
 
-  // 50ms 間隔で 1 PID 送信。応答待ち中は何もしない (GT_DASH と同じ)
+  // 100ms 間隔で 1 PID 送信。応答待ち中は何もしない
+  // (元は GT_DASH と同じ 50ms。BMW Mini のバス混雑回避のため緩めて検証中)
   function bleStartPolling() {
     recomputeActivePids();
     pollState.active   = true;
@@ -1556,7 +1557,7 @@
         _consecutiveTimeouts++;
         dbg('[TIMEOUT] pid=' + pollState.curPid + ' count=' + _consecutiveTimeouts);
       }, 500);
-    }, 50);
+    }, 100);   // ← 50ms → 100ms (BMW bus 混雑回避)
   }
 
   function bleStopPolling() {
