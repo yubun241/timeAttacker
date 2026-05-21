@@ -1502,7 +1502,7 @@
     // (UniCarScan 2000 は Mode 22 を完全サポートしないため)
     const fast = new Set();
     const slow = new Set();
-    if (pids.rpm)      fast.add('010C');
+    fast.add('010C');                                  // RPM は GT_DASH と同じく常時 FAST
     if (pids.coolant)  slow.add('0105');
     if (pids.oiltemp)  slow.add('015C');
     if (pids.intake)   slow.add('010F');
@@ -1511,10 +1511,15 @@
     ACTIVE_PIDS_FAST = [...fast];
     ACTIVE_PIDS_SLOW = [...slow];
     _slowIdx = 0;
+    // GT_DASH と同じ: キューリセット時に waiting / タイムアウト / lastDataAt も同時リセット
+    // → ウォッチドッグの誤検知を防ぐ
     pollState.pidQueue = [];
     pollState.waiting  = false;
     pollState.buf      = '';
     clearTimeout(_timeoutTimer);
+    _consecutiveTimeouts = 0;
+    _lastDataAt = Date.now();
+    dbg('[PID] fast=' + JSON.stringify(ACTIVE_PIDS_FAST) + ' slow=' + JSON.stringify(ACTIVE_PIDS_SLOW));
   }
 
   function nextPids() {
@@ -1562,76 +1567,45 @@
     if (_timeoutTimer) { clearTimeout(_timeoutTimer);  _timeoutTimer = null; }
   }
 
-  // notify ハンドラ — 受信データをバッファに蓄積し、応答PIDを照合して polling 状態を更新
+  // ════════════════════════════════════════════════════════
+  // notify ハンドラ — GT_DASH の onData を丸ごと移植 (動作実績あるコード)
+  // ════════════════════════════════════════════════════════
   function bleOnData(event) {
-    let chunk = '';
     try {
-      chunk = new TextDecoder().decode(event.target.value);
-      pollState.buf += chunk;
+      pollState.buf += new TextDecoder().decode(event.target.value);
     } catch (_) { return; }
-    // バッファ肥大化ガード
+    // buf 肥大化ガード: 512 byte 超えたら破棄してリセット
     if (pollState.buf.length > 512) {
+      dbg('[BUF] overflow → clear');
       pollState.buf = '';
       pollState.waiting = false;
       return;
     }
-    // '>' があるか、または非空行が1行以上あれば処理
-    // BLE は応答が複数チャンクに分割されることがあり、'>'を待つと取りこぼす
     if (!pollState.buf.includes('>') &&
         pollState.buf.split('\r').filter(x => x.trim()).length < 1) return;
-
-    // GT_DASH と同じタイミング: 応答が来たら無条件で waiting 解除
-    // (BMW Mini は 86% も STOPPED を返すため、curPid 一致を待つと詰まる)
     clearTimeout(_timeoutTimer);
-    const raw = pollState.buf;
+    const r = pollState.buf;
     pollState.buf = '';
     pollState.waiting = false;
     _consecutiveTimeouts = 0;
     _lastDataAt = Date.now();
     if (!state.obd.connected) return;
 
-    // デバッグ: 受信データを記録
+    // デバッグカウンタ
     _dbgRxCount++;
-    const el = document.getElementById('dbg-raw');
-    if (el) el.textContent = raw.replace(/[\r\n]/g, '↵').slice(0, 40);
+    const elRaw = document.getElementById('dbg-raw');
+    if (elRaw) elRaw.textContent = r.replace(/[\r\n]/g, '↵').slice(0, 40);
 
-    // オーバーレイログ (GT_DASH 同形式: [PID] "raw")
-    dbg('[' + (pollState.curPid || '----') + '] ' + JSON.stringify(raw));
-
-    state.obd.lastUpdateMs = Date.now();
-
-    const lines = raw.split('\r')
+    const lines = r.split('\r')
       .map(l => l.replace(/[\n>]/g, '').trim())
       .filter(l => l.length > 3);
-
-    // ───────────────────────────────────────────────────────────
-    // データ捕捉戦略 — 「タイミングは GT_DASH 流」「データ取得は header 自動検出」
-    //
-    // GT_DASH 流タイミング: 応答が来たら即座に waiting=false → polling 進行
-    //                       (STOPPED が多い BMW でも詰まらない)
-    // ヘッダ自動検出: 応答内の 41XX ヘッダから実際の PID を割り出して解析
-    //                 → 前 PID の late 応答や複数 PID 混在もデータとして拾う
-    // ───────────────────────────────────────────────────────────
-    const RESP_TO_PID = {
-      '410C': '010C', '4105': '0105', '415C': '015C',
-      '410F': '010F', '4111': '0111', '410B': '010B',
-      '410D': '010D'
-    };
-
+    const pid = pollState.curPid;
+    dbg('[' + pid + '] mode=' + state.settings.obdMode + ' lines=' + JSON.stringify(lines));
     if (lines.length > 0) {
-      const mode = state.settings.obdMode;
-      for (const line of lines) {
-        const upper = line.replace(/[\s>]/g, '').toUpperCase();
-        let parsedAny = false;
-        // 含まれる全ての既知ヘッダで解析
-        for (const [hdr, p] of Object.entries(RESP_TO_PID)) {
-          if (upper.includes(hdr)) {
-            if (parseObdLine(p, line)) parsedAny = true;
-          }
-        }
-        // 既知ヘッダが無ければ curPid でフォールバック
-        if (!parsedAny) parseObdLine(pollState.curPid, line);
-        if (mode === 'single' && parsedAny) break;
+      if (state.settings.obdMode === 'single') {
+        for (const l of lines) { if (parseObdLine(pid, l)) break; }
+      } else {
+        for (const l of lines) parseObdLine(pid, l);
       }
     }
   }
@@ -2126,33 +2100,35 @@
   let _dbgOkCount  = 0;
 
   // ─── デバッグオーバーレイ (GT_DASH 互換) ───
-  // OBD 生応答や状態遷移をリアルタイムで画面前面に表示。
-  // DBG ボタンで表示 ON/OFF。表示中もタッチは下層 UI に透過する。
-  const _dbgLog = [];
-  const DBG_MAX = 60;          // 直近 60 行を保持
+  // 非表示時は完全に早期 return — BMW Mini の高頻度トラフィックで
+  // CPU を浪費しないよう、GT_DASH と同じ実装に揃える
+  let _dbgLog = '';
   let _dbgEnabled = false;
 
   function dbg(msg) {
-    const line = '[' + new Date().toLocaleTimeString('ja-JP', { hour12: false }) + '] ' + msg;
-    _dbgLog.push(line);
-    if (_dbgLog.length > DBG_MAX) _dbgLog.shift();
-    if (_dbgEnabled) _renderDbgOverlay();
-  }
-
-  function _renderDbgOverlay() {
+    // ★ 非表示時は文字列操作を一切しない (GT_DASH と同じ)
+    if (!_dbgEnabled) return;
+    _dbgLog = msg + '\n' + _dbgLog;
+    if (_dbgLog.length > 1200) _dbgLog = _dbgLog.slice(0, 1200);
     const el = document.getElementById('dbg-overlay');
-    if (!el) return;
-    el.textContent = _dbgLog.join('\n');
-    el.scrollTop = el.scrollHeight;
+    if (el) el.textContent = _dbgLog;
   }
 
   function toggleDbgOverlay() {
     _dbgEnabled = !_dbgEnabled;
     const ol = document.getElementById('dbg-overlay');
     const btn = document.getElementById('land-btn-dbg');
-    if (ol)  ol.classList.toggle('show', _dbgEnabled);
+    if (ol) {
+      ol.classList.toggle('show', _dbgEnabled);
+      if (_dbgEnabled) {
+        ol.textContent = _dbgLog;
+      } else {
+        // 閉じたら即クリア (GT_DASH と同じ)
+        _dbgLog = '';
+        ol.textContent = '';
+      }
+    }
     if (btn) btn.classList.toggle('active', _dbgEnabled);
-    if (_dbgEnabled) _renderDbgOverlay();
   }
 
   // DBG ボタンクリックでトグル (横画面 + 設定画面)
